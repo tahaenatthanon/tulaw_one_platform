@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Smartphone, Shield, CheckCircle, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,27 @@ export default function MfaSetupPage() {
   const [step, setStep] = useState<"intro" | "setup" | "verify">("intro");
   const [code, setCode] = useState("");
   const [verified, setVerified] = useState(false);
+  const [required, setRequired] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const res = await fetch("/api/mfa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "check" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setRequired(json.data.required);
+        setEnabled(json.data.enabled);
+        if (json.data.required && !json.data.enabled) {
+          setStep("setup");
+        }
+      }
+    };
+    void load();
+  }, []);
 
   return (
     <div className="p-6 space-y-6 max-w-lg">
@@ -21,6 +42,9 @@ export default function MfaSetupPage() {
             <div><h2 className="text-sm font-semibold text-tu-text-primary">เปิดใช้งาน MFA</h2><p className="text-xs text-tu-text-muted">MFA จำเป็นสำหรับผู้ใช้ระดับ System Admin ขึ้นไป</p></div>
           </div>
           <p className="text-sm text-tu-text-secondary">MFA (Multi-Factor Authentication) เพิ่มขั้นตอนการยืนยันตัวตนอีกชั้นด้วยรหัส OTP ผ่านแอป Authenticator ทำให้บัญชีของคุณปลอดภัยแม้รหัสผ่านจะรั่วไหล</p>
+          <div className="rounded-lg border border-tu-border bg-tu-bg p-3 text-sm text-tu-text-secondary">
+            {required ? (enabled ? "สถานะ: เปิดใช้งานแล้ว" : "สถานะ: จำเป็นต้องตั้งค่า MFA ก่อนใช้งาน") : "สถานะ: ไม่มีข้อกำหนด MFA สำหรับบัญชีนี้"}
+          </div>
           <Button onClick={() => setStep("setup")}><Smartphone size={18} />เริ่มตั้งค่า</Button>
         </div>
       )}
@@ -47,7 +71,21 @@ export default function MfaSetupPage() {
           <h2 className="text-sm font-semibold text-tu-text-primary flex items-center gap-2"><CheckCircle size={18} className="text-tu-success" />ยืนยันรหัส OTP</h2>
           <p className="text-sm text-tu-text-secondary">กรอกรหัส 6 หลักจากแอป Authenticator</p>
           <Input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="000000" maxLength={6} className="text-center text-2xl tracking-[0.5em] font-mono" />
-          <Button onClick={() => { setVerified(true); alert("✅ MFA เปิดใช้งานสำเร็จ"); }} disabled={code.length !== 6}>ยืนยัน</Button>
+          <Button onClick={async () => {
+            const res = await fetch("/api/mfa", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "enable" }),
+            });
+            const json = await res.json();
+            if (json.success) {
+              setVerified(true);
+              setEnabled(true);
+              alert("✅ MFA เปิดใช้งานสำเร็จ");
+            } else {
+              alert(json.error?.message ?? "ไม่สามารถเปิด MFA ได้");
+            }
+          }} disabled={code.length !== 6}>ยืนยัน</Button>
           {verified && <p className="text-sm text-tu-success font-medium flex items-center gap-1.5"><CheckCircle size={16} />MFA พร้อมใช้งานแล้ว</p>}
         </div>
       )}

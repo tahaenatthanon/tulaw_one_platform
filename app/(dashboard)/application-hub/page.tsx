@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search, Star, Calculator, FileText, FolderSearch, GraduationCap,
   Users2, FlaskConical, Scale, CalendarCheck, HelpCircle, Library,
   ShoppingCart, Box, FileBarChart, ArrowDownToLine, ArrowUpFromLine,
   Repeat, CheckCheck, GitBranch, ScanEye, ClipboardCheck, Clock,
   Lightbulb, MessageSquare, BookOpen, CalendarDays, Building2,
-  Grid3X3, List, Wifi, Activity, Server, AlertTriangle, X, Lock, ArrowRight,
+  Grid3X3, List, Wifi, Activity, Server, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { useHasPermission } from "@/hooks/use-permission";
 
 interface SubModule {
   name: string; description: string; icon: React.ElementType; online: boolean;
@@ -89,7 +90,7 @@ export default function ApplicationHubPage() {
     catch { return new Set<string>(); }
   });
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [authStep, setAuthStep] = useState<{ app: AppGroup; step: "auth" | "modal" } | null>(null);
+  const router = useRouter();
 
   // Persist to localStorage whenever pinnedIds change
   useEffect(() => {
@@ -103,9 +104,29 @@ export default function ApplicationHubPage() {
       return next;
     });
   }, []);
-  const filtered = appGroups.filter((a) => search === "" || a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase()) || a.subs.some((s) => s.name.toLowerCase().includes(search.toLowerCase())));
+
+  // Role-based filter: show only apps the user has permission for
+  const canView = {
+    erp: useHasPermission("ERP_VIEW"),
+    "e-office": useHasPermission("E_OFFICE_VIEW"),
+    "document-management": useHasPermission("DOCUMENT_MANAGEMENT_VIEW"),
+    academic: useHasPermission("ACADEMIC_VIEW"),
+    hr: useHasPermission("HR_VIEW"),
+    research: useHasPermission("RESEARCH_VIEW"),
+    "legal-clinic": useHasPermission("LEGAL_CLINIC_VIEW"),
+    "book-meeting": useHasPermission("BOOK_MEETING_VIEW"),
+    support: useHasPermission("SUPPORT_VIEW"),
+  };
+
+  const visibleApps = appGroups.filter((a) => canView[a.id as keyof typeof canView]);
+  const filtered = visibleApps.filter((a) => search === "" || a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase()) || a.subs.some((s) => s.name.toLowerCase().includes(search.toLowerCase())));
   const pinnedApps = filtered.filter((a) => pinnedIds.has(a.id));
   const unpinnedApps = filtered.filter((a) => !pinnedIds.has(a.id));
+
+  const handleAppOpen = useCallback((app: AppGroup) => {
+    const targetUrl = app.url.startsWith("http") ? app.url : `http://localhost:8080${app.url}`;
+    window.location.assign(targetUrl);
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
@@ -120,10 +141,10 @@ export default function ApplicationHubPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "ระบบทั้งหมด", value: "9", sub: "40 โมดูลย่อย", icon: Server, c: "text-tu-primary", b: "bg-tu-primary-soft" },
+          { label: "ระบบทั้งหมด", value: visibleApps.length.toString(), sub: visibleApps.length === 9 ? "9 หมวดหมู่" : `${visibleApps.length} หมวดหมู่`, icon: Server, c: "text-tu-primary", b: "bg-tu-primary-soft" },
           { label: "Active Users", value: "24", sub: "วันนี้", icon: Activity, c: "text-tu-success", b: "bg-tu-success/10" },
-          { label: "ระบบออนไลน์", value: "8", sub: "89%", icon: Wifi, c: "text-tu-info", b: "bg-tu-info/10" },
-          { label: "บำรุงรักษา", value: "1", sub: "ERP (asset)", icon: AlertTriangle, c: "text-tu-warning", b: "bg-tu-warning/10" },
+          { label: "ระบบออนไลน์", value: String(visibleApps.filter(a => a.online).length), sub: `${Math.round((visibleApps.filter(a => a.online).length / Math.max(1, visibleApps.length)) * 100)}%`, icon: Wifi, c: "text-tu-info", b: "bg-tu-info/10" },
+          { label: "บำรุงรักษา", value: String(visibleApps.filter(a => !a.online).length), sub: visibleApps.filter(a => !a.online).map(a => a.name).join(", ") || "0", icon: AlertTriangle, c: "text-tu-warning", b: "bg-tu-warning/10" },
         ].map((s) => (
           <div key={s.label} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 flex items-center gap-3">
             <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${s.b}`}><s.icon size={20} className={s.c} /></div>
@@ -140,7 +161,7 @@ export default function ApplicationHubPage() {
         <div>
           <h2 className="text-sm font-semibold text-tu-text-secondary mb-3 flex items-center gap-2"><Star size={16} className="text-tu-secondary" />ปักหมุด</h2>
           <div className={cn(viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" : "space-y-2")}>
-            {pinnedApps.map((a) => <AppGroupCard key={a.id} app={a} viewMode={viewMode} isPinned onTogglePin={() => togglePin(a.id)} onOpen={() => setAuthStep({ app: a, step: "auth" })} />)}
+            {pinnedApps.map((a) => <AppGroupCard key={a.id} app={a} viewMode={viewMode} isPinned onTogglePin={() => togglePin(a.id)} onOpen={() => handleAppOpen(a)} />)}
           </div>
         </div>
       )}
@@ -152,76 +173,11 @@ export default function ApplicationHubPage() {
           <div className="text-center py-16 text-tu-text-muted"><Search size={48} className="mx-auto mb-3 opacity-30" /><p>ไม่พบ</p></div>
         ) : (
           <div className={cn(viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" : "space-y-2")}>
-            {unpinnedApps.map((a) => <AppGroupCard key={a.id} app={a} viewMode={viewMode} isPinned={false} onTogglePin={() => togglePin(a.id)} onOpen={() => setAuthStep({ app: a, step: "auth" })} />)}
+            {unpinnedApps.map((a) => <AppGroupCard key={a.id} app={a} viewMode={viewMode} isPinned={false} onTogglePin={() => togglePin(a.id)} onOpen={() => handleAppOpen(a)} />)}
           </div>
         )}
       </div>
 
-      {/* Auth + Modal */}
-      {authStep && authStep.step === "auth" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAuthStep(null)}>
-          <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border shadow-xl w-full max-w-sm p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
-            <div className="text-center">
-              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-tu-primary-soft">
-                <authStep.app.icon size={28} className="text-tu-primary" />
-              </div>
-              <h2 className="text-lg font-semibold text-tu-text-primary">{authStep.app.name}</h2>
-              <p className="text-xs text-tu-text-muted mt-1">Sign in to access {authStep.app.subs.length} modules</p>
-            </div>
-            <div className="bg-tu-info/5 border border-tu-info/10 rounded-lg p-3 text-xs text-tu-text-secondary">
-              <p className="font-medium text-tu-info mb-1">Authentication Required</p>
-              <p>Enter credentials to unlock {authStep.app.name} and its sub-modules.</p>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); setAuthStep({ app: authStep.app, step: "modal" }); }} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-tu-text-secondary mb-1">Username</label>
-                <input type="text" required defaultValue="admin@tulaw.ac.th" placeholder="enter username" className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm focus:ring-2 focus:ring-tu-border-focus/20 outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-tu-text-secondary mb-1">Password</label>
-                <input type="password" required defaultValue="TuLaw@2026!" placeholder="••••••••" className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm focus:ring-2 focus:ring-tu-border-focus/20 outline-none" />
-              </div>
-              <button type="submit" className="flex items-center justify-center gap-2 w-full rounded-[--radius-btn] bg-tu-primary px-4 py-2.5 text-sm font-medium text-tu-text-inverse hover:bg-tu-primary-hover transition-colors">
-                <Lock size={16} />Sign In<ArrowRight size={16} />
-              </button>
-            </form>
-            <div className="flex justify-between">
-              <button onClick={() => setAuthStep(null)} className="text-xs text-tu-text-muted hover:text-tu-text-secondary">Cancel</button>
-              <span className="text-[10px] text-tu-text-muted">TULAW ONE PLATFORM SSO</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {authStep && authStep.step === "modal" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAuthStep(null)}>
-          <div className="bg-tu-surface rounded-xl border border-tu-border shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3 p-5 border-b border-tu-border shrink-0">
-              <div className="relative">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-tu-primary-soft"><authStep.app.icon size={24} className="text-tu-primary" /></div>
-                <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-tu-surface ${authStep.app.online ? "bg-tu-success" : "bg-tu-warning"}`} />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-tu-text-primary">{authStep.app.name}</h3>
-                <p className="text-sm text-tu-text-muted">{authStep.app.description}</p>
-              </div>
-              <button onClick={() => setAuthStep(null)} className="p-1.5 rounded-lg hover:bg-tu-surface-hover text-tu-text-muted"><X size={20} /></button>
-            </div>
-            <div className="overflow-y-auto p-4 space-y-2">
-              {authStep.app.subs.map((sub) => (
-                <a key={sub.name} href={authStep.app.url} className="flex items-center gap-3 px-4 py-3 rounded-lg border border-tu-border hover:bg-tu-bg hover:border-tu-primary/30 transition-all cursor-pointer group">
-                  <div className="relative shrink-0">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-tu-primary-soft"><sub.icon size={18} className="text-tu-primary" /></div>
-                    <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-tu-surface ${sub.online ? "bg-tu-success" : "bg-tu-warning"}`} />
-                  </div>
-                  <div className="flex-1 min-w-0"><p className="text-sm font-medium text-tu-text-primary">{sub.name}</p><p className="text-xs text-tu-text-muted">{sub.description}</p></div>
-                  <Badge variant={sub.online ? "success" : "warning"} className="text-[10px] shrink-0">{sub.online ? "Online" : "Maintenance"}</Badge>
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

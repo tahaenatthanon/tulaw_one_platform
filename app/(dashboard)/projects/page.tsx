@@ -12,6 +12,7 @@ import { Plus, Search, GripVertical, Calendar, Users, CheckCircle, XCircle, Chec
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useHasPermission } from "@/hooks/use-permission";
 
 type ColumnId = "planning" | "in_progress" | "pending_approval" | "completed";
 
@@ -38,7 +39,7 @@ const columns: { id: ColumnId; label: string; color: string }[] = [
   { id: "completed", label: "เสร็จสิ้น", color: "border-t-tu-success" },
 ];
 
-function SortableCard({ project, onApprove, onReject }: { project: ProjectCard; onApprove?: (id: string) => void; onReject?: (id: string) => void }) {
+function SortableCard({ project, onApprove, onReject, canApprove, canEdit }: { project: ProjectCard; onApprove: (id: string) => void; onReject?: (id: string) => void; canApprove?: boolean; canEdit?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id, data: { column: project.column } });
 
   return (
@@ -58,7 +59,7 @@ function SortableCard({ project, onApprove, onReject }: { project: ProjectCard; 
         <div className="flex justify-between text-[10px] text-tu-text-muted mb-0.5"><span>ความคืบหน้า</span><span>{project.progress}%</span></div>
         <div className="h-1.5 rounded-full bg-tu-bg overflow-hidden"><div className={cn("h-full rounded-full", project.progress === 100 ? "bg-tu-success" : project.progress >= 50 ? "bg-tu-secondary" : "bg-tu-primary")} style={{ width: `${project.progress}%` }} /></div>
       </div>
-      {project.column === "pending_approval" && onApprove && (
+      {project.column === "pending_approval" && canApprove && (
         <div className="flex gap-1.5 mt-2 pt-2 border-t border-tu-border">
           <button onClick={() => onApprove(project.id)} className="flex-1 flex items-center justify-center gap-1 rounded-md bg-tu-success/10 px-2 py-1.5 text-[10px] font-medium text-tu-success hover:bg-tu-success/20 transition-colors"><Check size={12} />อนุมัติ</button>
           <button onClick={() => onReject?.(project.id)} className="flex-1 flex items-center justify-center gap-1 rounded-md bg-tu-error/10 px-2 py-1.5 text-[10px] font-medium text-tu-error hover:bg-tu-error/20 transition-colors"><XCircle size={12} />ปฏิเสธ</button>
@@ -74,6 +75,9 @@ export default function ProjectsPage() {
   const [activeProject, setActiveProject] = useState<ProjectCard | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const canCreate = useHasPermission("PROJECTS_CREATE");
+  const canApprove = useHasPermission("PROJECTS_APPROVE");
+  const canEdit = useHasPermission("PROJECTS_EDIT");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
@@ -102,7 +106,7 @@ export default function ProjectsPage() {
     <div className="p-6 space-y-4 h-full flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shrink-0">
         <div><h1 className="text-2xl font-semibold text-tu-text-primary">โครงการ</h1><p className="text-tu-text-muted text-sm mt-1">Kanban Board — ลากวาง + อนุมัติ/ปฏิเสธ</p></div>
-        <Button><Plus size={18} />สร้างโครงการ</Button>
+        {canCreate && <Button><Plus size={18} />สร้างโครงการ</Button>}
       </div>
       <div className="flex flex-col sm:flex-row gap-3 shrink-0">
         <div className="relative max-w-md flex-1"><Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" /><input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหา..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface pl-9 pr-4 py-2 text-sm focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 outline-none transition" /></div>
@@ -117,7 +121,7 @@ export default function ProjectsPage() {
                 <div className="px-4 py-3 flex items-center justify-between shrink-0"><h3 className="text-sm font-semibold text-tu-text-primary">{col.label}</h3><Badge variant="outline" className="text-[10px]">{colProjects.length}</Badge></div>
                 <SortableContext items={colProjects.map((p) => p.id)}>
                   <div className="flex-1 px-3 pb-3 space-y-2 overflow-y-auto">
-                    {colProjects.map((proj) => (<SortableCard key={proj.id} project={proj} onApprove={handleApprove} onReject={handleReject} />))}
+                    {colProjects.map((proj) => (<SortableCard key={proj.id} project={proj} onApprove={handleApprove} onReject={handleReject} canApprove={canApprove} canEdit={canEdit} />))}
                   </div>
                 </SortableContext>
               </div>

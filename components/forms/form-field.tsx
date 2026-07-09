@@ -37,7 +37,7 @@ interface FormInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 export function FormInput({ label, error, required, helperText, className, ...props }: FormInputProps) {
   return (
     <FormField label={label} error={error} required={required} helperText={helperText} className={className}>
-      <Input {...props} className={cn(error && "border-tu-error focus:ring-tu-error/20", props.className)} />
+      <Input {...props} className={cn(error && "border-tu-error focus:ring-tu-error/20", className)} />
     </FormField>
   );
 }

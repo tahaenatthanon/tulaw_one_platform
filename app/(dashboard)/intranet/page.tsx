@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Newspaper, Plus, Calendar, Search, ChevronRight, Users, BookOpen, FlaskConical, GraduationCap, Building2, Phone, Mail, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useHasPermission } from "@/hooks/use-permission";
 
 const mockAnnouncements = [
   {
@@ -62,6 +63,7 @@ const statusColor: Record<string, string> = {
 export default function IntranetPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"news" | "calendar" | "contacts">("news");
+  const canCreate = useHasPermission("INTRANET_CREATE");
 
   const filtered = mockAnnouncements.filter(
     (a) =>
@@ -81,10 +83,10 @@ export default function IntranetPage() {
             ข่าวสาร ประกาศ และปฏิทินกิจกรรม
           </p>
         </div>
-        <button className="inline-flex items-center gap-2 rounded-[--radius-btn] bg-tu-primary px-4 py-2.5 text-sm font-medium text-tu-text-inverse hover:bg-tu-primary-hover active:bg-tu-primary-active transition-colors">
+        {canCreate && <button className="inline-flex items-center gap-2 rounded-[--radius-btn] bg-tu-primary px-4 py-2.5 text-sm font-medium text-tu-text-inverse hover:bg-tu-primary-hover active:bg-tu-primary-active transition-colors">
           <Plus size={18} />
           สร้างประกาศ
-        </button>
+        </button>}
       </div>
 
       {/* Tabs */}
@@ -306,8 +308,13 @@ const firstDayOffset = 2;
 function CalendarTab() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  const displayEvents = selectedDay
-    ? calendarEvents[selectedDay] ?? []
+  const displayEvents: Array<{ title: string; time: string; room: string; dot: string; dayLabel?: string }> = selectedDay
+    ? (calendarEvents[selectedDay] ?? []).map((e) => ({
+        title: e.title,
+        time: e.time,
+        room: e.room,
+        dot: e.dot,
+      }))
     : allCalEvents.map((e) => ({
         title: e.title,
         time: e.time,

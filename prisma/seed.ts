@@ -49,38 +49,46 @@ async function main(): Promise<void> {
   }
 
   // ==============================================================================
-  // 3. Admin User — admin@tulaw.ac.th / TuLaw@2026!
+  // 3. Users — 6 Role Accounts (all with password: TuLaw@2026!)
   // ==============================================================================
   const passwordHash = await bcrypt.hash("TuLaw@2026!", 12);
-  const user = await prisma.user.upsert({
-    where: { email: "admin@tulaw.ac.th" },
-    update: { passwordHash, status: UserStatus.ACTIVE },
-    create: {
-      email: "admin@tulaw.ac.th",
-      firstNameTh: "ผู้ดูแล",
-      lastNameTh: "ระบบ",
-      departmentId: dept.id,
-      passwordHash,
-      status: UserStatus.ACTIVE,
-    },
-  });
-  console.log(`✅ User: ${user.email}`);
 
-  // 4. Assign SUPER_ADMIN role
-  const existingUserRole = await prisma.userRole.findFirst({
-    where: { userId: user.id, roleId: roleMap["super_admin"] },
-  });
-  if (!existingUserRole) {
-    await prisma.userRole.create({
-      data: {
-        userId: user.id,
-        roleId: roleMap["super_admin"],
-        isActive: true,
+  const usersData = [
+    { email: "admin@tulaw.ac.th", firstNameTh: "ผู้ดูแล", lastNameTh: "ระบบ", roleCode: "super_admin" },
+    { email: "sysadmin@tulaw.ac.th", firstNameTh: "สมชาย", lastNameTh: "ใจดี", roleCode: "system_admin" },
+    { email: "dean@tulaw.ac.th", firstNameTh: "สมศรี", lastNameTh: "รักเรียน", roleCode: "dean" },
+    { email: "deptadmin@tulaw.ac.th", firstNameTh: "วิชัย", lastNameTh: "มั่นคง", roleCode: "dept_admin" },
+    { email: "user@tulaw.ac.th", firstNameTh: "นภา", lastNameTh: "สดใส", roleCode: "user" },
+    { email: "viewer@tulaw.ac.th", firstNameTh: "ธนา", lastNameTh: "ปัญญา", roleCode: "viewer" },
+  ];
+
+  for (const u of usersData) {
+    const user = await prisma.user.upsert({
+      where: { email: u.email },
+      update: { passwordHash, status: UserStatus.ACTIVE },
+      create: {
+        email: u.email,
+        firstNameTh: u.firstNameTh,
+        lastNameTh: u.lastNameTh,
+        departmentId: dept.id,
+        passwordHash,
+        status: UserStatus.ACTIVE,
       },
     });
-    console.log(`✅ UserRole: ${user.email} → super_admin`);
-  } else {
-    console.log(`⏭️  UserRole already exists`);
+    console.log(`✅ User: ${u.email} (${u.firstNameTh} ${u.lastNameTh})`);
+
+    // Assign role
+    const existingRole = await prisma.userRole.findFirst({
+      where: { userId: user.id, roleId: roleMap[u.roleCode] },
+    });
+    if (!existingRole) {
+      await prisma.userRole.create({
+        data: { userId: user.id, roleId: roleMap[u.roleCode], isActive: true },
+      });
+      console.log(`   ↳ Role: ${u.roleCode}`);
+    } else {
+      console.log(`   ↳ Role already assigned`);
+    }
   }
 
   console.log("\n🎉 Seeding complete!");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Users, FolderOpen, Briefcase, CalendarCheck,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { useHasPermission } from "@/hooks/use-permission";
 
 /* ==============================================================================
    Data
@@ -214,7 +215,7 @@ function ComparisonChart() {
    Main Page
    ============================================================================== */
 
-export default function DashboardPage() {
+function DashboardPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const view = (searchParams.get("view") as ViewId) || "overview";
@@ -312,5 +313,13 @@ export default function DashboardPage() {
       {view === "comparison" && <ComparisonChart />}
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-tu-text-muted">Loading dashboard...</div>}>
+      <DashboardPageContent />
+    </Suspense>
   );
 }

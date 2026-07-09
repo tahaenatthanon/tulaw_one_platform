@@ -5,6 +5,7 @@ import { FolderOpen, Upload, Search, FileText, Download, HardDrive } from "lucid
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useHasPermission } from "@/hooks/use-permission";
 
 const QUOTA_GB = 5;
 const USED_GB = 2.1;
@@ -21,6 +22,7 @@ export default function DocumentsPage() {
   const [search, setSearch] = useState("");
   const [pool, setPool] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const canUpload = useHasPermission("DOCUMENTS_UPLOAD");
 
   const filtered = mockDocs.filter((d) => d.title.toLowerCase().includes(search.toLowerCase()) && (!pool || d.pool === pool));
 
@@ -43,10 +45,12 @@ export default function DocumentsPage() {
           <h1 className="text-2xl font-semibold text-tu-text-primary">เอกสาร</h1>
           <p className="text-tu-text-muted text-sm mt-1">ระบบจัดการเอกสาร 3 ระดับ · รองรับ PDF, XLSX, PPTX, DOCX, PNG, JPG</p>
         </div>
-        <label className="inline-flex items-center gap-2 rounded-[--radius-btn] bg-tu-primary px-4 py-2.5 text-sm font-medium text-tu-text-inverse hover:bg-tu-primary-hover transition-colors cursor-pointer">
-          <Upload size={18} />{uploading ? "กำลังอัปโหลด..." : "อัปโหลดเอกสาร"}
-          <input type="file" accept=".pdf,.xlsx,.pptx,.docx,.png,.jpg" onChange={handleUpload} className="hidden" />
-        </label>
+        {canUpload && (
+          <label className="inline-flex items-center gap-2 rounded-[--radius-btn] bg-tu-primary px-4 py-2.5 text-sm font-medium text-tu-text-inverse hover:bg-tu-primary-hover transition-colors cursor-pointer">
+            <Upload size={18} />{uploading ? "กำลังอัปโหลด..." : "อัปโหลดเอกสาร"}
+            <input type="file" accept=".pdf,.xlsx,.pptx,.docx,.png,.jpg" onChange={handleUpload} className="hidden" />
+          </label>
+        )}
       </div>
 
       <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-5">

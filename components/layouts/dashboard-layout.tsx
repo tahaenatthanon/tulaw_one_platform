@@ -53,7 +53,7 @@ const adminNav: NavItem[] = [
     href: "/audit-log",
     label: "บันทึกความปลอดภัย",
     icon: ShieldCheck,
-    roles: ["super_admin", "system_admin", "dean"],
+    roles: ["super_admin", "system_admin"],
   },
   {
     href: "/settings",
@@ -316,8 +316,13 @@ const startDay = 2; // Tuesday (0=Sun, 1=Mon, 2=Tue)
 function RightSidebar() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  const displayEvents = selectedDay
-    ? eventsData[selectedDay] ?? []
+  const displayEvents: Array<{ title: string; time: string; room: string; dot: string; dayLabel?: string }> = selectedDay
+    ? (eventsData[selectedDay] ?? []).map((e) => ({
+        title: e.title,
+        time: e.time,
+        room: e.room,
+        dot: e.dot,
+      }))
     : allEvents.map((e) => ({
         title: e.title,
         time: e.time,

@@ -1,8 +1,8 @@
 "use client";
 
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Eye,
   EyeOff,
@@ -19,8 +19,10 @@ const features = [
   { title: "9 Application Modules", desc: "ครอบคลุมทุกการทำงานตั้งแต่ ERP ถึงคลินิกกฎหมาย" },
 ];
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
   const [email, setEmail] = useState("admin@tulaw.ac.th");
   const [password, setPassword] = useState("TuLaw@2026!");
   const [showPassword, setShowPassword] = useState(false);
@@ -43,7 +45,7 @@ export default function LoginPage() {
     if (result?.error) {
       setError(result.error);
     } else {
-      router.push("/dashboard");
+      router.push(callbackUrl);
       router.refresh();
     }
   }
@@ -244,7 +246,7 @@ export default function LoginPage() {
 
             {/* Google OAuth */}
             <button
-              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+              onClick={() => signIn("google", { callbackUrl })}
               className="w-full rounded-[--radius-btn] border border-tu-border bg-tu-surface px-4 py-2.5 text-tu-text-primary font-medium hover:bg-tu-surface-hover transition-colors flex items-center justify-center gap-2"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -263,5 +265,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center bg-tu-bg text-sm text-tu-text-muted">Loading login...</div>}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

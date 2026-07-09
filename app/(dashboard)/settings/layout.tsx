@@ -5,14 +5,18 @@ import { ShieldCheck, Key, Lock, Plug, Palette, Bell } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PermissionGuard } from "@/components/shared/permission-guard";
+import { useHasPermission } from "@/hooks/use-permission";
 
 const subNav = [
   { href: "/settings/auth-settings", label: "การยืนยันตัวตน", icon: ShieldCheck },
-  { href: "/settings/sso-config", label: "ตั้งค่า Microsoft SSO", icon: Key },
   { href: "/settings/security-settings", label: "ความปลอดภัย", icon: Lock },
   { href: "/settings/api-integration", label: "API Integration", icon: Plug },
   { href: "/settings/system-branding", label: "ปรับแต่งระบบ", icon: Palette },
   { href: "/settings/notification-settings", label: "การแจ้งเตือน", icon: Bell },
+];
+
+const restrictedNav = [
+  { href: "/settings/sso-config", label: "ตั้งค่า Microsoft SSO", icon: Key, perm: "SETTINGS_SSO" },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
@@ -25,6 +29,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 
 function SettingsSubLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const canApiKeys = useHasPermission("SETTINGS_API_KEYS");
+  const canSso = useHasPermission("SETTINGS_SSO");
   return (
     <div className="flex flex-col lg:flex-row h-full">
       <aside className="lg:w-56 shrink-0 border-b lg:border-b-0 lg:border-r border-tu-border bg-tu-surface p-3 space-y-1">

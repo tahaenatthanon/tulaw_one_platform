@@ -5,6 +5,7 @@ import { CalendarCheck, Plus, Clock, Users, MapPin, ShieldAlert, Video } from "l
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useHasPermission } from "@/hooks/use-permission";
 
 const mockBookings = [
   { id: "1", title: "ประชุมคณะกรรมการบริหาร", room: "ห้องประชุม 201", date: "2025-07-10", time: "09:00 - 12:00", attendees: 12, status: "confirmed", teamsLink: "https://teams.microsoft.com/l/meetup-join/abc123" },
@@ -28,6 +29,8 @@ export default function BookMeetingPage() {
   const [form, setForm] = useState({ title: "", room: "", date: "", time: "" });
   const [addTeams, setAddTeams] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
+  const canCreate = useHasPermission("BOOK_MEETING_CREATE");
+  const canApprove = useHasPermission("BOOK_MEETING_APPROVE");
 
   const handleBook = () => {
     if (!form.title || !form.room || !form.date || !form.time) { alert("กรุณากรอกข้อมูลให้ครบ"); return; }
@@ -42,7 +45,7 @@ export default function BookMeetingPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div><h1 className="text-2xl font-semibold text-tu-text-primary">จองห้องประชุม</h1><p className="text-tu-text-muted text-sm mt-1">จองห้องประชุมออนไลน์ + MS Teams + Double-Booking Prevention</p></div>
-        <Button onClick={() => { setShowForm(true); setGeneratedLink(""); }}><Plus size={18} />จองห้องประชุม</Button>
+        {canCreate && <Button onClick={() => { setShowForm(true); setGeneratedLink(""); }}><Plus size={18} />จองห้องประชุม</Button>}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
