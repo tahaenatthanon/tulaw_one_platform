@@ -1,26 +1,98 @@
 @import "tailwindcss";
 
+/* ==============================================================================
+   TULAW ONE PLATFORM — Design Tokens
+   Thammasat University Faculty of Law Brand Colors (60-30-10)
+   ============================================================================== */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ─── Brand Tokens ─── */
+  --tu-primary:        #A31D1D;
+  --tu-primary-hover:  #8B1515;
+  --tu-primary-active: #731111;
+  --tu-primary-soft:   #FCEAEA;
+
+  --tu-secondary:        #FDB813;
+  --tu-secondary-hover:  #E5A800;
+  --tu-secondary-active: #C99200;
+  --tu-secondary-soft:   #FFF7DE;
+
+  /* ─── Semantic Tokens ─── */
+  --tu-bg:            #F8F9FA;
+  --tu-surface:       #FFFFFF;
+  --tu-surface-hover: #F1F3F5;
+  --tu-border:        #DEE2E6;
+  --tu-border-focus:  #A31D1D;
+  --tu-text-primary:   #212529;
+  --tu-text-secondary: #495057;
+  --tu-text-muted:     #868E96;
+  --tu-text-inverse:   #FFFFFF;
+
+  /* ─── Status Colors ─── */
+  --tu-success: #2D8A4E;
+  --tu-warning: #E8A317;
+  --tu-error:   #DC3545;
+  --tu-info:    #2F6D91;
+
+  /* ─── Typography ─── */
+  --font-prompt: var(--font-prompt), 'Inter', system-ui, sans-serif;
+
+  /* ─── Spacing ─── */
+  --spacing-unit: 8px;
+
+  /* ─── Border Radius ─── */
+  --radius-btn:    10px;
+  --radius-input:  10px;
+  --radius-card:   12px;
+  --radius-dialog: 16px;
 }
 
+/* ─── Tailwind v4 Theme ─── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-tu-primary:        var(--tu-primary);
+  --color-tu-primary-hover:  var(--tu-primary-hover);
+  --color-tu-primary-active: var(--tu-primary-active);
+  --color-tu-primary-soft:   var(--tu-primary-soft);
+  --color-tu-secondary:        var(--tu-secondary);
+  --color-tu-secondary-hover:  var(--tu-secondary-hover);
+  --color-tu-secondary-active: var(--tu-secondary-active);
+  --color-tu-secondary-soft:   var(--tu-secondary-soft);
+  --color-tu-bg:            var(--tu-bg);
+  --color-tu-surface:       var(--tu-surface);
+  --color-tu-surface-hover: var(--tu-surface-hover);
+  --color-tu-border:        var(--tu-border);
+  --color-tu-border-focus:  var(--tu-border-focus);
+  --color-tu-text-primary:   var(--tu-text-primary);
+  --color-tu-text-secondary: var(--tu-text-secondary);
+  --color-tu-text-muted:     var(--tu-text-muted);
+  --color-tu-text-inverse:   var(--tu-text-inverse);
+  --color-tu-success: var(--tu-success);
+  --color-tu-warning: var(--tu-warning);
+  --color-tu-error:   var(--tu-error);
+  --color-tu-info:    var(--tu-info);
+  --font-sans: var(--font-prompt);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ─── Base Styles ─── */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--tu-bg);
+  color: var(--tu-text-primary);
+  font-family: var(--font-prompt);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar — hide everywhere ─── */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Focus Ring ─── */
+*:focus-visible {
+  outline: 2px solid var(--tu-border-focus);
+  outline-offset: 2px;
 }
