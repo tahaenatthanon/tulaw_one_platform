@@ -43,6 +43,7 @@ Provides global navigation and user account access.
 **Components:**
 - System Logo / Title
 - Global Search
+- Advanced Search: keyword, date range, category filters
 - Notifications
 - User Profile
 - User Menu
@@ -227,6 +228,44 @@ Creating a new component requires a clear business justification.
 ### 5.4 Button Hierarchy
 
 Each page should have only ONE Primary Action.
+
+### 5.4a View Mode / Tab Selector Standard
+
+When implementing view mode toggles (เช่น Grid/List, Overview/Weekly/Trend ฯลฯ) หรือ tab selectors แบบ pill ใช้รูปแบบมาตรฐานดังนี้:
+
+**Container:** `flex gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5`
+
+**Button:**
+```
+flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors
+```
+
+**Active state:** `bg-tu-primary text-white shadow-sm`
+
+**Inactive state:** `text-tu-text-secondary`
+
+**Icon size:** `14` (ถ้ามี icon)
+
+**ตัวอย่าง:**
+```tsx
+<div className="flex gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5">
+  {options.map((opt) => (
+    <button
+      key={opt.id}
+      onClick={() => setValue(opt.id)}
+      className={cn(
+        "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+        value === opt.id ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary"
+      )}
+    >
+      {opt.icon && <opt.icon size={14} />}
+      {opt.label}
+    </button>
+  ))}
+</div>
+```
+
+ห้ามใช้รูปแบบอื่นสำหรับการเลือกมุมมองหรือ tab selector โดยเด็ดขาด
 
 Priority
 
@@ -1184,7 +1223,6 @@ to roles via `role_permissions` join table.
 -   Real-time organizational summary with last sync date/time
 -   Support 5 views: Overview, Weekly, Trend, Proportion, Comparison
 -   Department-specific dashboards for 3 departments: IT, Academic, Support
--   Advanced Search: keyword, date range, category filters
 -   Latest important announcements with link to view all
 -   Role-based data visibility
 

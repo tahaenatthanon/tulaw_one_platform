@@ -1,0 +1,85 @@
+import { NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requirePermission } from "@/lib/auth-guard";
+import { apiSuccess, apiError, parsePagination } from "@/lib/api-utils";
+
+// GET /api/erp/purchase-orders
+export async function GET(req: NextRequest) {
+  const session = await requirePermission("ERP_VIEW");
+  if (!session) return apiError("UNAUTHORIZED", "ไม่มีสิทธิ์เข้าถึง", 403);
+
+  const { page, limit, skip } = parsePagination(req);
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get("search") || "";
+  const status = searchParams.get("status");
+
+  const where: Record<string, unknown> = {};
+  if (search) where.poNo = { contains: search, mode: "insensitive" };
+  if (status) where.status = status;
+
+  const [data, total] = await Promise.all([
+    prisma.erpPurchaseOrder.findMany({
+      where: where as any, skip, take: limit, orderBy: { createdAt: "desc" },
+      include: { items: true, vendor: { select: { companyName: true } } },
+    }),
+    prisma.erpPurchaseOrder.count({ where: where as any }),
+  ]);
+
+  return apiSuccess(data, { total, page, limit });
+}
+
+// POST /api/erp/purchase-orders
+export async function POST(req: NextRequest) {
+  const session = await requirePermission("ERP_MANAGE");
+  if (!session) return apiError("UNAUTHORIZED", "ไม่มีสิทธิ์จัดการ", 403);
+
+  const body = await req.json();
+  const { poNo, vendorId, items } = body;
+  if (!poNo || !vendorId || !items?.length) return apiError("VALIDATION", "กรุณากรอกข้อมูลให้ครบถ้วน");
+
+  const po = await prisma.erpPurchaseOrder.create({
+    data: {
+      poNo, vendorId,
+      items: { create: items.map((i: { itemName: string; quantity: number; unitPrice: number }) => ({ itemName: i.itemName, quantity: i.quantity, unitPrice: i.unitPrice })) },
+      createdBy: session.user.id,
+    },
+    include: { items: true, vendor: true },
+  });
+
+  return apiSuccess(po);
+}
+
+// PUT /api/erp/purchase-orders
+export async function PUT(req: NextRequest) {
+  const session = await requirePermission("ERP_APPROVE");
+  if (!session) return apiError("UNAUTHORIZED", "ไม่มีสิทธิ์อนุมัติ", 403);
+
+  const body = await req.json();
+  const { id, status, vendorId, items } = body;
+  if (!id) return apiError("VALIDATION", "กรุณาระบุ ID");
+
+  const updateData: Record<string, unknown> = { updatedBy: session.user.id };
+  if (status) updateData.status = status;
+  if (vendorId) updateData.vendorId = vendorId;
+
+  const po = await prisma.erpPurchaseOrder.update({
+    where: { id },
+    data: updateData,
+    include: { items: true, vendor: true },
+  });
+
+  return apiSuccess(po);
+}
+
+// DELETE /api/erp/purchase-orders
+export async function DELETE(req: NextRequest) {
+  const session = await requirePermission("ERP_MANAGE");
+  if (!session) return apiError("UNAUTHORIZED", "ไม่มีสิทธิ์จัดการ", 403);
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return apiError("VALIDATION", "กรุณาระบุ ID");
+
+  await prisma.erpPurchaseOrder.update({ where: { id }, data: { deletedAt: new Date(), deletedBy: session.user.id } });
+  return apiSuccess({ deleted: true });
+}

@@ -1,7 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Newspaper, Plus, Calendar, Search, ChevronRight, Users, BookOpen, FlaskConical, GraduationCap, Building2, Phone, Mail, MapPin } from "lucide-react";
+import { useState, useMemo } from "react";
+import {
+  Newspaper, Plus, Calendar, Search, ChevronRight, Users, BookOpen,
+  FlaskConical, GraduationCap, Building2, Phone, Mail, MapPin,
+  BellRing, CheckCheck, Megaphone, ScrollText, Vote, AlertTriangle,
+  UsersRound, BookMarked, Microscope, School, FolderKanban,
+  BarChart3, X, ChevronDown, Filter
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHasPermission } from "@/hooks/use-permission";
 
@@ -48,6 +54,34 @@ const mockAnnouncements = [
   },
 ];
 
+/* ─── 4 ประเภทประกาศ: สี+ไอคอนเฉพาะ ─── */
+const categoryMeta: Record<string, { label: string; icon: React.ElementType; badge: string; dot: string }> = {
+  "ประกาศด่วน": {
+    label: "ประกาศด่วน",
+    icon: AlertTriangle,
+    badge: "bg-tu-error/10 text-tu-error border-tu-error/30",
+    dot: "bg-tu-error",
+  },
+  "เชิญชวน": {
+    label: "เชิญชวน",
+    icon: Megaphone,
+    badge: "bg-tu-secondary-soft text-tu-secondary-active border-tu-secondary/30",
+    dot: "bg-tu-secondary-active",
+  },
+  "ประกาศผล": {
+    label: "ประกาศผล",
+    icon: ScrollText,
+    badge: "bg-tu-info/10 text-tu-info border-tu-info/30",
+    dot: "bg-tu-info",
+  },
+  "นโยบาย": {
+    label: "นโยบาย",
+    icon: Vote,
+    badge: "bg-tu-primary-soft text-tu-primary border-tu-primary/30",
+    dot: "bg-tu-primary",
+  },
+};
+
 const statusLabel: Record<string, string> = {
   published: "เผยแพร่แล้ว",
   draft: "ฉบับร่าง",
@@ -62,13 +96,18 @@ const statusColor: Record<string, string> = {
 
 export default function IntranetPage() {
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"news" | "calendar" | "contacts">("news");
+  const [categoryFilter, setCategoryFilter] = useState<string>("ทั้งหมด");
+  const [activeTab, setActiveTab] = useState<"news" | "calendar" | "contacts" | "subscribe">("news");
   const canCreate = useHasPermission("INTRANET_CREATE");
 
-  const filtered = mockAnnouncements.filter(
-    (a) =>
-      a.title.toLowerCase().includes(search.toLowerCase()) ||
-      a.category.toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(() =>
+    mockAnnouncements.filter(
+      (a) =>
+        (categoryFilter === "ทั้งหมด" || a.category === categoryFilter) &&
+        (a.title.toLowerCase().includes(search.toLowerCase()) ||
+         a.category.toLowerCase().includes(search.toLowerCase()))
+    ),
+    [search, categoryFilter]
   );
 
   return (
@@ -115,7 +154,7 @@ export default function IntranetPage() {
           <Calendar size={16} />
           ปฏิทิน
         </button>
-        <button
+                <button
           onClick={() => setActiveTab("contacts")}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
@@ -126,6 +165,18 @@ export default function IntranetPage() {
         >
           <Building2 size={16} />
           ติดต่อหน่วยงาน
+        </button>
+        <button
+          onClick={() => setActiveTab("subscribe")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
+            activeTab === "subscribe"
+              ? "bg-tu-primary text-white shadow-sm"
+              : "text-tu-text-secondary hover:text-tu-text-primary"
+          )}
+        >
+          <BellRing size={16} />
+          ติดตาม
         </button>
       </div>
 

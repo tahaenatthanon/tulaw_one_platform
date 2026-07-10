@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Grid3X3,
@@ -20,10 +20,14 @@ import {
   ChevronRight,
   PanelRightClose,
   PanelRightOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   Clock,
   Calendar,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+  import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { AdvancedSearchPanel } from "@/components/shared/advanced-search-panel";
 
 interface NavItem {
   href: string;
@@ -34,165 +38,167 @@ interface NavItem {
 
 const platformNav: NavItem[] = [
   { href: "/dashboard", label: "แดชบอร์ด", icon: LayoutDashboard },
-  {
-    href: "/application-hub",
-    label: "ศูนย์กลางแอปพลิเคชัน",
-    icon: Grid3X3,
-  },
+  { href: "/application-hub", label: "ศูนย์กลางแอปพลิเคชัน", icon: Grid3X3 },
   { href: "/intranet", label: "อินทราเน็ต", icon: Newspaper },
 ];
 
 const adminNav: NavItem[] = [
-  {
-    href: "/users",
-    label: "ผู้ใช้งานและสิทธิ์",
-    icon: Users,
-    roles: ["super_admin", "system_admin"],
-  },
-  {
-    href: "/audit-log",
-    label: "บันทึกความปลอดภัย",
-    icon: ShieldCheck,
-    roles: ["super_admin", "system_admin"],
-  },
-  {
-    href: "/settings",
-    label: "ตั้งค่าระบบ",
-    icon: Settings,
-    roles: ["super_admin", "system_admin"],
-  },
+  { href: "/users", label: "ผู้ใช้งานและสิทธิ์", icon: Users, roles: ["super_admin", "system_admin"] },
+  { href: "/audit-log", label: "บันทึกความปลอดภัย", icon: ShieldCheck, roles: ["super_admin", "system_admin"] },
+  { href: "/settings", label: "ตั้งค่าระบบ", icon: Settings, roles: ["super_admin", "system_admin"] },
 ];
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const roles = (session?.user as { roles?: string[] })?.roles ?? [];
+
+  // Load collapsed preference from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("sidebar-collapsed");
+    if (saved === "true") setSidebarCollapsed(true);
+  }, []);
+
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    localStorage.setItem("sidebar-collapsed", String(next));
+  };
 
   function hasAccess(item: NavItem): boolean {
     if (!item.roles) return true;
     return item.roles.some((r) => roles.includes(r));
   }
 
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* ─── Left Sidebar ─── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-tu-primary-active text-white transition-transform lg:static lg:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed inset-y-0 left-0 z-50 flex flex-col bg-tu-primary-active text-white transition-all duration-200 lg:static",
+          sidebarCollapsed ? "lg:w-[68px]" : "lg:w-64",
+          !sidebarCollapsed ? "w-64" : "w-[68px]",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center gap-3 px-5 border-b border-white/10">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-tu-secondary">
-            <span className="text-tu-text-primary font-bold text-sm">มธ</span>
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-tight truncate">TULAW ONE</p>
-            <p className="text-[10px] text-white/60 leading-tight">
-              Faculty of Law, TU
-            </p>
-          </div>
-          <button
-            className="ml-auto lg:hidden text-white/70 hover:text-white"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <X size={20} />
-          </button>
+        <div className={cn("flex h-16 items-center border-b border-white/10 px-3", sidebarCollapsed ? "justify-center" : "gap-3 px-5")}>
+          <TooltipWrapper show={sidebarCollapsed} label="TULAW ONE">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-tu-secondary">
+              <span className="text-tu-text-primary font-bold text-sm">มธ</span>
+            </div>
+          </TooltipWrapper>
+          {!sidebarCollapsed && (
+            <>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-tight truncate">TULAW ONE</p>
+                <p className="text-[10px] text-white/60 leading-tight">Faculty of Law, TU</p>
+              </div>
+              <button className="ml-auto lg:hidden text-white/70 hover:text-white" onClick={() => setSidebarOpen(false)}>
+                <X size={20} />
+              </button>
+            </>
+          )}
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          <p className="px-3 text-[11px] font-medium uppercase tracking-wider text-white/40 mb-2">
-            เมนูหลัก
-          </p>
+        <nav className="flex-1 overflow-y-auto py-4 space-y-1">
+          {!sidebarCollapsed && (
+            <p className="px-3 text-[11px] font-medium uppercase tracking-wider text-white/40 mb-2">
+              เมนูหลัก
+            </p>
+          )}
           {platformNav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-[--radius-btn] text-sm font-medium transition-colors",
-                pathname === item.href || pathname.startsWith(item.href + "/")
-                  ? "bg-tu-secondary text-tu-text-primary"
-                  : "text-white/70 hover:bg-white/10 hover:text-white"
-              )}
-            >
-              <item.icon size={20} />
-              {item.label}
-            </Link>
+            <TooltipWrapper key={item.href} show={sidebarCollapsed} label={item.label}>
+              <Link
+                href={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-[--radius-btn] text-sm font-medium transition-colors",
+                  sidebarCollapsed ? "justify-center mx-2 px-0 py-2.5" : "mx-3 px-3 py-2.5",
+                  isActive(item.href) ? "bg-tu-secondary text-tu-text-primary" : "text-white/70 hover:bg-white/10 hover:text-white"
+                )}
+              >
+                <item.icon size={20} />
+                {!sidebarCollapsed && item.label}
+              </Link>
+            </TooltipWrapper>
           ))}
 
           {adminNav.filter(hasAccess).length > 0 && (
             <>
-              <p className="px-3 pt-4 text-[11px] font-medium uppercase tracking-wider text-white/40 mb-2">
-                ดูแลระบบ
-              </p>
-              {adminNav
-                .filter(hasAccess)
-                .map((item) => (
+              {!sidebarCollapsed && (
+                <p className="px-3 pt-4 text-[11px] font-medium uppercase tracking-wider text-white/40 mb-2">
+                  ดูแลระบบ
+                </p>
+              )}
+              {adminNav.filter(hasAccess).map((item) => (
+                <TooltipWrapper key={item.href} show={sidebarCollapsed} label={item.label}>
                   <Link
-                    key={item.href}
                     href={item.href}
                     onClick={() => setSidebarOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-[--radius-btn] text-sm font-medium transition-colors",
-                      pathname === item.href ||
-                        pathname.startsWith(item.href + "/")
-                        ? "bg-tu-secondary text-tu-text-primary"
-                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                      "flex items-center gap-3 rounded-[--radius-btn] text-sm font-medium transition-colors",
+                      sidebarCollapsed ? "justify-center mx-2 px-0 py-2.5" : "mx-3 px-3 py-2.5",
+                      isActive(item.href) ? "bg-tu-secondary text-tu-text-primary" : "text-white/70 hover:bg-white/10 hover:text-white"
                     )}
                   >
                     <item.icon size={20} />
-                    {item.label}
+                    {!sidebarCollapsed && item.label}
                   </Link>
-                ))}
+                </TooltipWrapper>
+              ))}
             </>
           )}
         </nav>
 
-        <div className="border-t border-white/10 p-3">
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="flex w-full items-center gap-3 px-3 py-2.5 rounded-[--radius-btn] text-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors"
-          >
-            <LogOut size={20} />
-            ออกจากระบบ
-          </button>
+        <div className="border-t border-white/10 p-2">
+          <TooltipWrapper show={sidebarCollapsed} label="ออกจากระบบ">
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className={cn(
+                "flex items-center gap-3 rounded-[--radius-btn] text-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors",
+                sidebarCollapsed ? "justify-center w-full p-2.5" : "w-full px-3 py-2.5"
+              )}
+            >
+              <LogOut size={20} />
+              {!sidebarCollapsed && "ออกจากระบบ"}
+            </button>
+          </TooltipWrapper>
         </div>
       </aside>
 
       {/* Overlay (mobile) */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* ─── Main + Right Panel ─── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-tu-border bg-tu-surface px-4 lg:px-6">
-          <button
-            className="lg:hidden text-tu-text-secondary"
-            onClick={() => setSidebarOpen(true)}
-          >
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-tu-border bg-tu-surface px-4 lg:px-6">
+          {/* Mobile menu toggle */}
+          <button className="lg:hidden text-tu-text-secondary shrink-0" onClick={() => setSidebarOpen(true)}>
             <Menu size={24} />
+          </button>
+
+          {/* Desktop sidebar collapse toggle */}
+          <button
+            className="hidden lg:flex shrink-0 rounded-lg p-2 text-tu-text-secondary hover:bg-tu-surface-hover transition-colors"
+            onClick={toggleSidebar}
+            title={sidebarCollapsed ? "ขยายเมนู" : "ย่อเมนู"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
           </button>
 
           {/* Global Search */}
           <div className="relative flex-1 max-w-md hidden sm:block">
-            <Search
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted"
-            />
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" />
             <input
               type="text"
               placeholder="ค้นหา..."
@@ -200,9 +206,13 @@ export default function DashboardLayout({
             />
           </div>
 
+          {/* Advanced Search Button (standalone component with results panel) */}
+          <div className="hidden sm:block">
+            <AdvancedSearchPanel categories={["ประกาศ", "ผู้ใช้", "เอกสาร", "โครงการ", "ทั้งหมด"]} />
+          </div>
+
           {/* Right side */}
           <div className="flex items-center gap-2 ml-auto">
-            {/* Right Panel Toggle */}
             <button
               onClick={() => setRightPanelOpen(!rightPanelOpen)}
               className="hidden xl:flex rounded-lg p-2 text-tu-text-secondary hover:bg-tu-surface-hover transition-colors"
@@ -221,21 +231,9 @@ export default function DashboardLayout({
                 {session?.user?.name?.charAt(0) ?? "?"}
               </div>
               <div className="hidden sm:block text-sm">
-                <p className="font-medium text-tu-text-primary leading-tight">
-                  {session?.user?.name ?? "ผู้ใช้งาน"}
-                </p>
+                <p className="font-medium text-tu-text-primary leading-tight">{session?.user?.name ?? "ผู้ใช้งาน"}</p>
                 <p className="text-xs text-tu-text-muted leading-tight">
-                  {roles.includes("super_admin")
-                    ? "ผู้ดูแลระบบสูงสุด"
-                    : roles.includes("system_admin")
-                      ? "ผู้ดูแลระบบ"
-                      : roles.includes("dean")
-                        ? "คณบดี"
-                        : roles.includes("dept_admin")
-                          ? "ผู้ดูแลหน่วยงาน"
-                          : roles.includes("viewer")
-                            ? "ผู้ดูข้อมูล"
-                            : "ผู้ใช้งาน"}
+                  {roles.includes("super_admin") ? "ผู้ดูแลระบบสูงสุด" : roles.includes("system_admin") ? "ผู้ดูแลระบบ" : roles.includes("dean") ? "คณบดี" : roles.includes("dept_admin") ? "ผู้ดูแลหน่วยงาน" : roles.includes("viewer") ? "ผู้ดูข้อมูล" : "ผู้ใช้งาน"}
                 </p>
               </div>
               <ChevronDown size={16} className="text-tu-text-muted hidden sm:block" />
@@ -243,18 +241,25 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        {/* Body: Main Content + Right Sidebar */}
+        {/* Body */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Main Content */}
-          <main className="flex-1 overflow-y-auto">
-            {children}
-          </main>
-
-          {/* ─── Right Sidebar (Context Panel) ─── */}
-          {rightPanelOpen && (
-            <RightSidebar />
-          )}
+          <main className="flex-1 overflow-y-auto">{children}</main>
+          {rightPanelOpen && <RightSidebar />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Tooltip wrapper for collapsed sidebar ─── */
+function TooltipWrapper({ children, show, label }: { children: React.ReactNode; show: boolean; label: string }) {
+  if (!show) return <>{children}</>;
+  return (
+    <div className="relative group/tip flex justify-center">
+      {children}
+      <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-[60] px-2.5 py-1.5 rounded-md bg-tu-text-primary text-white text-xs whitespace-nowrap opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-100 pointer-events-none shadow-lg">
+        {label}
+        <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 rotate-45 bg-tu-text-primary" />
       </div>
     </div>
   );
