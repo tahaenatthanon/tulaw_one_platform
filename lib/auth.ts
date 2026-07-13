@@ -5,16 +5,24 @@ import type {
 } from "next";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
-export const authOptions: NextAuthOptions = {
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
+function buildProviders(): NextAuthOptions["providers"] {
+  const providers: NextAuthOptions["providers"] = [];
+
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const GoogleProvider = require("next-auth/providers/google").default;
+    providers.push(
+      GoogleProvider({
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      })
+    );
+  }
+
+  providers.push(
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -60,8 +68,14 @@ export const authOptions: NextAuthOptions = {
           roles: user.userRoles.map((ur) => ur.role.roleCode),
         };
       },
-    }),
-  ],
+    })
+  );
+
+  return providers;
+}
+
+export const authOptions: NextAuthOptions = {
+  providers: buildProviders(),
   callbacks: {
     async jwt({ token, user, account }) {
       if (user) {
