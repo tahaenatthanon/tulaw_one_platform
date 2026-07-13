@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   Eye,
   EyeOff,
@@ -19,7 +19,6 @@ const features = [
 ];
 
 function LoginPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
   const [email, setEmail] = useState("admin@tulaw.ac.th");
@@ -50,27 +49,27 @@ function LoginPageContent() {
           callbackUrl,
           json: "true",
         }),
-        redirect: "manual",
       });
 
       if (res.ok) {
         const data = await res.json();
-        if (data.url) {
-          router.push(data.url);
-          router.refresh();
-        } else {
-          router.push(callbackUrl);
-          router.refresh();
-        }
+        // Hard navigation ensures the Set-Cookie session token
+        // is sent with the next request
+        window.location.href = data.url || callbackUrl;
       } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || (res.status >= 500 ? "เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่อีกครั้ง" : "อีเมลหรือรหัสผ่านไม่ถูกต้อง"));
+        const text = await res.text();
+        let msg = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+        try {
+          const data = JSON.parse(text);
+          msg = data.error || (res.status >= 500 ? "เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่อีกครั้ง" : msg);
+        } catch {}
+        setError(msg);
+        setLoading(false);
       }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง";
       setError(message);
-    } finally {
       setLoading(false);
     }
   }
