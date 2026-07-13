@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Eye,
@@ -35,19 +34,37 @@ function LoginPageContent() {
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
+      // Get CSRF token
+      const csrfRes = await fetch("/api/auth/csrf");
+      const csrfData = await csrfRes.json();
+      const csrfToken = csrfData.csrfToken;
+
+      // Call credentials callback
+      const res = await fetch("/api/auth/callback/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          csrfToken,
+          callbackUrl,
+          json: "true",
+        }),
+        redirect: "manual",
       });
 
-      if (result?.error) {
-        setError(result.error);
-      } else if (result?.ok) {
-        router.push(callbackUrl);
-        router.refresh();
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          router.push(data.url);
+          router.refresh();
+        } else {
+          router.push(callbackUrl);
+          router.refresh();
+        }
       } else {
-        setError("ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง");
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || (res.status >= 500 ? "เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่อีกครั้ง" : "อีเมลหรือรหัสผ่านไม่ถูกต้อง"));
       }
     } catch (err) {
       const message =
@@ -253,8 +270,8 @@ function LoginPageContent() {
             </div>
 
             {/* Google OAuth */}
-            <button
-              onClick={() => signIn("google", { callbackUrl })}
+            <a
+              href={"/api/auth/signin/google?callbackUrl=" + encodeURIComponent(callbackUrl)}
               className="w-full rounded-[--radius-btn] border border-tu-border bg-tu-surface px-4 py-2.5 text-tu-text-primary font-medium hover:bg-tu-surface-hover transition-colors flex items-center justify-center gap-2"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -264,7 +281,7 @@ function LoginPageContent() {
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
               </svg>
               เข้าสู่ระบบด้วย Google
-            </button>
+            </a>
 
             <p className="text-center text-xs text-tu-text-muted mt-6">
               © {new Date().getFullYear()} Faculty of Law, Thammasat University
