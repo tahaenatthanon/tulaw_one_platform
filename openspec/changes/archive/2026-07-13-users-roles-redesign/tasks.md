@@ -1,0 +1,8 @@
+- [x] 1. Role stat cards
+- [x] 2. Search + role dropdown
+- [x] 3. Status filter
+- [x] 4. User table with AD sync column
+- [x] 5. Add user dialog
+- [x] 6. CSV import dialog
+- [x] 7. 300+ mock users
+- [x] 8. TypeScript zero errors

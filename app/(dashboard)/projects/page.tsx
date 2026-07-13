@@ -4,52 +4,245 @@ import { useState } from "react";
 import {
   DndContext, DragOverlay, closestCorners,
   KeyboardSensor, PointerSensor, useSensor, useSensors,
-  type DragStartEvent, type DragEndEvent,
+  type DragStartEvent, type DragEndEvent, useDroppable,
 } from "@dnd-kit/core";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Search, GripVertical, Calendar, Users, CheckCircle, XCircle, Check } from "lucide-react";
+import { Plus, Search, GripVertical, Calendar, Users, CheckCircle, XCircle, Check, Trash2, UserPlus, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useHasPermission } from "@/hooks/use-permission";
 
+/* ==============================================================================
+   Types
+   ============================================================================== */
+
 type ColumnId = "planning" | "in_progress" | "pending_approval" | "completed";
+type ProjectType = "วิชาการ" | "หลักสูตร" | "สัมมนา" | "วิจัย" | "IT" | "งบประมาณ";
+
+interface Member { name: string; role: string; }
 
 interface ProjectCard {
-  id: string; name: string; description: string; type: string;
-  column: ColumnId; progress: number; owner: string; deadline: string; tasks: number;
+  id: string; name: string; description: string; type: ProjectType;
+  column: ColumnId; progress: number; owner: string; deadline: string;
+  startDate: string; members: Member[]; reason?: string;
 }
 
-const initialProjects: ProjectCard[] = [
-  { id: "1", name: "พัฒนาระบบฐานข้อมูลกฎหมาย", description: "สืบค้นกฎหมายดิจิทัล", type: "IT", column: "in_progress", progress: 65, owner: "วิชัย", deadline: "2025-09-30", tasks: 12 },
-  { id: "2", name: "ปรับปรุงหลักสูตร ป.ตรี 2569", description: "อัปเดตหลักสูตร", type: "หลักสูตร", column: "planning", progress: 20, owner: "สมศรี", deadline: "2025-12-15", tasks: 8 },
-  { id: "3", name: "สัมมนากฎหมายระหว่างประเทศ", description: "สัมมนาเชิงปฏิบัติการ", type: "สัมมนา", column: "in_progress", progress: 80, owner: "สมชาย", deadline: "2025-08-20", tasks: 15 },
-  { id: "4", name: "จัดทำรายงานประจำปี 2568", description: "รายงานผลการดำเนินงาน", type: "งบประมาณ", column: "pending_approval", progress: 95, owner: "ผู้ดูแล", deadline: "2025-07-30", tasks: 5 },
-  { id: "5", name: "อบรม PDPA บุคลากร", description: "กฎหมายคุ้มครองข้อมูล", type: "วิชาการ", column: "planning", progress: 10, owner: "นภา", deadline: "2025-10-01", tasks: 6 },
-  { id: "6", name: "พัฒนาเว็บไซต์คณะใหม่", description: "รีดีไซน์ UI/UX", type: "IT", column: "in_progress", progress: 40, owner: "ธนา", deadline: "2025-11-01", tasks: 9 },
-  { id: "7", name: "ขอทุนวิจัยกฎหมายสิ่งแวดล้อม", description: "เสนอโครงการวิจัย", type: "วิจัย", column: "pending_approval", progress: 70, owner: "สมศรี", deadline: "2025-08-15", tasks: 4 },
-  { id: "8", name: "ประเมินการสอน 1/2568", description: "ประเมินอาจารย์", type: "วิชาการ", column: "completed", progress: 100, owner: "สมชาย", deadline: "2025-06-30", tasks: 3 },
+const COLUMNS: { id: ColumnId; label: string; color: string }[] = [
+  { id: "planning", label: "Planning", color: "border-t-tu-info" },
+  { id: "in_progress", label: "In Progress", color: "border-t-tu-warning" },
+  { id: "pending_approval", label: "Pending Approval", color: "border-t-tu-secondary-active" },
+  { id: "completed", label: "Completed", color: "border-t-tu-success" },
 ];
 
-const columns: { id: ColumnId; label: string; color: string }[] = [
-  { id: "planning", label: "วางแผน", color: "border-t-tu-info" },
-  { id: "in_progress", label: "กำลังดำเนินการ", color: "border-t-tu-warning" },
-  { id: "pending_approval", label: "รออนุมัติ", color: "border-t-tu-secondary-active" },
-  { id: "completed", label: "เสร็จสิ้น", color: "border-t-tu-success" },
+const PROJECT_TYPES: ProjectType[] = ["วิชาการ", "หลักสูตร", "สัมมนา", "วิจัย", "IT", "งบประมาณ"];
+
+const INITIAL_PROJECTS: ProjectCard[] = [
+  { id: "1", name: "พัฒนาระบบฐานข้อมูลกฎหมาย", description: "สืบค้นกฎหมายดิจิทัล", type: "IT", column: "in_progress", progress: 65, owner: "วิชัย", deadline: "2025-09-30", startDate: "2025-03-01", members: [{ name: "วิชัย", role: "Project Lead" }, { name: "สมชาย", role: "Developer" }, { name: "นภา", role: "Tester" }] },
+  { id: "2", name: "ปรับปรุงหลักสูตร ป.ตรี 2569", description: "อัปเดตหลักสูตร", type: "หลักสูตร", column: "planning", progress: 20, owner: "สมศรี", deadline: "2025-12-15", startDate: "2025-06-01", members: [{ name: "สมศรี", role: "Project Lead" }, { name: "พิมพ์ใจ", role: "Coordinator" }] },
+  { id: "3", name: "สัมมนากฎหมายระหว่างประเทศ", description: "สัมมนาเชิงปฏิบัติการ", type: "สัมมนา", column: "in_progress", progress: 80, owner: "สมชาย", deadline: "2025-08-20", startDate: "2025-05-01", members: [{ name: "สมชาย", role: "Organizer" }, { name: "ธนา", role: "Speaker" }] },
+  { id: "4", name: "จัดทำรายงานประจำปี 2568", description: "รายงานผลการดำเนินงาน", type: "งบประมาณ", column: "pending_approval", progress: 95, owner: "ผู้ดูแล", deadline: "2025-07-30", startDate: "2025-01-01", members: [{ name: "ผู้ดูแล", role: "Author" }, { name: "วิชัย", role: "Reviewer" }] },
+  { id: "5", name: "อบรม PDPA บุคลากร", description: "กฎหมายคุ้มครองข้อมูล", type: "วิชาการ", column: "planning", progress: 10, owner: "นภา", deadline: "2025-10-01", startDate: "2025-07-01", members: [{ name: "นภา", role: "Trainer" }] },
+  { id: "6", name: "พัฒนาเว็บไซต์คณะใหม่", description: "รีดีไซน์ UI/UX", type: "IT", column: "in_progress", progress: 40, owner: "ธนา", deadline: "2025-11-01", startDate: "2025-04-01", members: [{ name: "ธนา", role: "Developer" }, { name: "วิชัย", role: "Designer" }] },
+  { id: "7", name: "ขอทุนวิจัยกฎหมายสิ่งแวดล้อม", description: "เสนอโครงการวิจัย", type: "วิจัย", column: "pending_approval", progress: 70, owner: "สมศรี", deadline: "2025-08-15", startDate: "2025-05-15", members: [{ name: "สมศรี", role: "Researcher" }, { name: "สมชาย", role: "Co-Researcher" }] },
+  { id: "8", name: "ประเมินการสอน 1/2568", description: "ประเมินอาจารย์", type: "วิชาการ", column: "completed", progress: 100, owner: "สมชาย", deadline: "2025-06-30", startDate: "2025-04-01", members: [{ name: "สมชาย", role: "Evaluator" }] },
 ];
 
-function SortableCard({ project, onApprove, onReject, canApprove, canEdit }: { project: ProjectCard; onApprove: (id: string) => void; onReject?: (id: string) => void; canApprove?: boolean; canEdit?: boolean }) {
+/* ==============================================================================
+   Create / Edit Project Modal
+   ============================================================================== */
+
+function ProjectFormModal({ open, onClose, onSave, edit }: {
+  open: boolean; onClose: () => void;
+  onSave: (data: { name: string; type: ProjectType; description: string; startDate: string; deadline: string; members: Member[]; progress?: number }) => void;
+  edit?: ProjectCard;
+}) {
+  const [name, setName] = useState(edit?.name ?? "");
+  const [type, setType] = useState<ProjectType>(edit?.type ?? "วิชาการ");
+  const [desc, setDesc] = useState(edit?.description ?? "");
+  const [start, setStart] = useState(edit?.startDate ?? "");
+  const [end, setEnd] = useState(edit?.deadline ?? "");
+  const [members, setMembers] = useState<Member[]>(edit?.members ?? []);
+  const [progress, setProgress] = useState(edit?.progress ?? 0);
+  const [ddOpen, setDdOpen] = useState(false);
+
+  const addMember = () => setMembers([...members, { name: "", role: "" }]);
+  const removeMember = (i: number) => setMembers(members.filter((_, idx) => idx !== i));
+  const updateMember = (i: number, field: keyof Member, val: string) => {
+    const next = [...members];
+    next[i] = { ...next[i], [field]: val };
+    setMembers(next);
+  };
+
+  const handleSave = () => {
+    if (!name.trim()) return;
+    onSave({ name: name.trim(), type, description: desc.trim(), startDate: start, deadline: end, members: members.filter(m => m.name.trim()), progress: edit ? progress : undefined });
+    setName(""); setType("วิชาการ"); setDesc(""); setStart(""); setEnd(""); setProgress(0); setMembers([]); setDdOpen(false);
+    onClose();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-tu-surface rounded-[--radius-dialog] border border-tu-border shadow-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-tu-text-primary">{edit ? "แก้ไขโครงการ" : "สร้างโครงการ"}</h2>
+          <button onClick={onClose} className="p-1 rounded-md text-tu-text-muted hover:bg-tu-surface-hover"><XCircle size={18} /></button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">ชื่อโครงการ <span className="text-tu-error">*</span></label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ระบุชื่อโครงการ..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" />
+          </div>
+
+          {/* Type dropdown */}
+          <div className="relative">
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">ประเภท <span className="text-tu-error">*</span></label>
+            <button onClick={() => setDdOpen(!ddOpen)} className="w-full flex items-center justify-between rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors">
+              <span className="text-tu-text-primary">{type}</span>
+              <span className="text-tu-text-muted text-xs">▾</span>
+            </button>
+            {ddOpen && (
+              <div className="absolute top-full mt-1 w-full bg-tu-surface border border-tu-border rounded-lg shadow-lg z-10 py-1">
+                {PROJECT_TYPES.map(t => (
+                  <button key={t} onClick={() => { setType(t); setDdOpen(false); }} className={cn("w-full text-left px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors", type === t && "bg-tu-primary-soft text-tu-primary font-medium")}>{t}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">วัตถุประสงค์</label>
+            <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2} placeholder="ระบุวัตถุประสงค์..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 resize-none" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-medium text-tu-text-secondary mb-1.5">วันที่เริ่ม</label><input type="date" value={start} onChange={e => setStart(e.target.value)} className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" /></div>
+            <div><label className="block text-xs font-medium text-tu-text-secondary mb-1.5">วันที่สิ้นสุด</label><input type="date" value={end} onChange={e => setEnd(e.target.value)} className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" /></div>
+          </div>
+
+          {/* Progress slider (edit only) */}
+          {edit && (
+            <div>
+              <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">ความคืบหน้า: {progress}%</label>
+              <input type="range" min={0} max={100} value={progress} onChange={e => setProgress(Number(e.target.value))} className="w-full accent-tu-primary" />
+              <div className="w-full h-2 rounded-full bg-tu-bg overflow-hidden mt-1">
+                <div className={cn("h-full rounded-full transition-all", progress === 100 ? "bg-tu-success" : progress >= 50 ? "bg-tu-secondary" : "bg-tu-primary")} style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          )}
+
+          {/* Members */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-tu-text-secondary">สมาชิก</label>
+              <button onClick={addMember} className="flex items-center gap-1 text-xs font-medium text-tu-primary hover:text-tu-primary-hover transition-colors"><UserPlus size={12} />เพิ่มสมาชิก</button>
+            </div>
+            {members.length === 0 && <p className="text-xs text-tu-text-muted py-2">ยังไม่มีสมาชิก — กด "เพิ่มสมาชิก" เพื่อเพิ่ม</p>}
+            <div className="space-y-2">
+              {members.map((m, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input type="text" value={m.name} onChange={e => updateMember(i, "name", e.target.value)} placeholder="ชื่อ" className="flex-1 rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" />
+                  <input type="text" value={m.role} onChange={e => updateMember(i, "role", e.target.value)} placeholder="บทบาท" className="w-28 rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" />
+                  <button onClick={() => removeMember(i)} className="p-1.5 rounded-md text-tu-text-muted hover:text-tu-error hover:bg-tu-error/10 transition-colors"><Trash2 size={14} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-6 justify-end">
+          <button onClick={onClose} className="rounded-[--radius-btn] border border-tu-border px-4 py-2 text-sm font-medium text-tu-text-secondary hover:bg-tu-surface-hover transition-colors">ยกเลิก</button>
+          <button onClick={handleSave} disabled={!name.trim()} className="rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed">{edit ? "บันทึก" : "สร้างโครงการ"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================================================================
+   Approve Modal (อนุมัติ + ยกเลิก, no X)
+   ============================================================================== */
+
+function ApproveModal({ open, onClose, onAction, project }: {
+  open: boolean; onClose: () => void;
+  onAction: (id: string, reason: string) => void;
+  project: ProjectCard | null;
+}) {
+  const [reason, setReason] = useState("");
+  if (!open || !project) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-tu-surface rounded-[--radius-dialog] border border-tu-border shadow-xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-tu-text-primary mb-1">{project.name}</h2>
+        <p className="text-sm text-tu-text-secondary mb-4">{project.description}</p>
+        <div>
+          <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">เหตุผลในการอนุมัติ <span className="text-tu-error">*</span></label>
+          <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} placeholder="ระบุเหตุผล..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 resize-none" />
+        </div>
+        <div className="flex gap-2 mt-6 justify-end">
+          <button onClick={onClose} className="rounded-[--radius-btn] border border-tu-border px-4 py-2 text-sm font-medium text-tu-text-secondary hover:bg-tu-surface-hover transition-colors">ยกเลิก</button>
+          <button onClick={() => { onAction(project.id, reason.trim()); setReason(""); onClose(); }} disabled={!reason.trim()} className="rounded-[--radius-btn] bg-tu-success px-4 py-2 text-sm font-medium text-white hover:brightness-110 transition-colors disabled:opacity-50">อนุมัติ</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================================================================
+   Reject Modal (ปฏิเสธ + ยกเลิก, no X)
+   ============================================================================== */
+
+function RejectModal({ open, onClose, onAction, project }: {
+  open: boolean; onClose: () => void;
+  onAction: (id: string, reason: string) => void;
+  project: ProjectCard | null;
+}) {
+  const [reason, setReason] = useState("");
+  if (!open || !project) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-tu-surface rounded-[--radius-dialog] border border-tu-border shadow-xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-tu-text-primary mb-1">{project.name}</h2>
+        <p className="text-sm text-tu-text-secondary mb-4">{project.description}</p>
+        <div>
+          <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">เหตุผลในการปฏิเสธ <span className="text-tu-error">*</span></label>
+          <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} placeholder="ระบุเหตุผล..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 resize-none" />
+        </div>
+        <div className="flex gap-2 mt-6 justify-end">
+          <button onClick={onClose} className="rounded-[--radius-btn] border border-tu-border px-4 py-2 text-sm font-medium text-tu-text-secondary hover:bg-tu-surface-hover transition-colors">ยกเลิก</button>
+          <button onClick={() => { onAction(project.id, reason.trim()); setReason(""); onClose(); }} disabled={!reason.trim()} className="rounded-[--radius-btn] border border-tu-error px-4 py-2 text-sm font-medium text-tu-error hover:bg-tu-error/10 transition-colors disabled:opacity-50">ปฏิเสธ</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================================================================
+   Sortable Card
+   ============================================================================== */
+
+function SortableCard({ project, onEdit, onApproveClick, onRejectClick, canApprove }: {
+  project: ProjectCard;
+  onEdit: (p: ProjectCard) => void;
+  onApproveClick: (p: ProjectCard) => void;
+  onRejectClick: (p: ProjectCard) => void;
+  canApprove?: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id, data: { column: project.column } });
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }} className="bg-tu-surface rounded-lg border border-tu-border p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing">
+    <div ref={setNodeRef} {...attributes} {...listeners} suppressHydrationWarning style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, touchAction: "none" }}
+      className="bg-tu-surface rounded-lg border border-tu-border p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group">
       <div className="flex items-start gap-2 mb-2">
-        <button {...attributes} {...listeners} className="mt-0.5 text-tu-text-muted hover:text-tu-text-secondary shrink-0"><GripVertical size={14} /></button>
+        <GripVertical size={14} className="mt-0.5 text-tu-text-muted shrink-0 pointer-events-none" />
         <div className="flex-1 min-w-0">
           <h4 className="text-sm font-semibold text-tu-text-primary leading-snug">{project.name}</h4>
           <p className="text-xs text-tu-text-muted mt-0.5 line-clamp-1">{project.description}</p>
         </div>
+        <button onPointerDown={e => { e.stopPropagation(); onEdit(project); }} className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-tu-text-muted hover:text-tu-primary hover:bg-tu-primary-soft transition-all shrink-0"><Pencil size={13} /></button>
       </div>
       <div className="flex items-center gap-2 mb-2">
         <Badge variant="outline" className="text-[10px]">{project.type}</Badge>
@@ -60,76 +253,176 @@ function SortableCard({ project, onApprove, onReject, canApprove, canEdit }: { p
         <div className="h-1.5 rounded-full bg-tu-bg overflow-hidden"><div className={cn("h-full rounded-full", project.progress === 100 ? "bg-tu-success" : project.progress >= 50 ? "bg-tu-secondary" : "bg-tu-primary")} style={{ width: `${project.progress}%` }} /></div>
       </div>
       {project.column === "pending_approval" && canApprove && (
-        <div className="flex gap-1.5 mt-2 pt-2 border-t border-tu-border">
-          <button onClick={() => onApprove(project.id)} className="flex-1 flex items-center justify-center gap-1 rounded-md bg-tu-success/10 px-2 py-1.5 text-[10px] font-medium text-tu-success hover:bg-tu-success/20 transition-colors"><Check size={12} />อนุมัติ</button>
-          <button onClick={() => onReject?.(project.id)} className="flex-1 flex items-center justify-center gap-1 rounded-md bg-tu-error/10 px-2 py-1.5 text-[10px] font-medium text-tu-error hover:bg-tu-error/20 transition-colors"><XCircle size={12} />ปฏิเสธ</button>
+        <div className="flex gap-1.5 mt-2 pt-2 border-t border-tu-border" onClick={e => e.stopPropagation()}>
+          <button onPointerDown={e => { e.stopPropagation(); onApproveClick(project); }} className="flex-1 flex items-center justify-center gap-1 rounded-md bg-tu-success/10 px-2 py-1.5 text-[10px] font-medium text-tu-success hover:bg-tu-success/20 transition-colors"><Check size={12} />อนุมัติ</button>
+          <button onPointerDown={e => { e.stopPropagation(); onRejectClick(project); }} className="flex-1 flex items-center justify-center gap-1 rounded-md bg-tu-error/10 px-2 py-1.5 text-[10px] font-medium text-tu-error hover:bg-tu-error/20 transition-colors"><XCircle size={12} />ปฏิเสธ</button>
         </div>
       )}
-      <div className="flex items-center justify-between text-[10px] text-tu-text-muted mt-1"><span className="flex items-center gap-1"><Users size={10} />{project.owner}</span><span className="flex items-center gap-1"><CheckCircle size={10} />{project.tasks} งาน</span></div>
+      <div className="flex items-center justify-between text-[10px] text-tu-text-muted mt-1">
+        <span className="flex items-center gap-1"><Users size={10} />{project.owner}</span>
+        <span className="flex items-center gap-1"><Users size={10} />{project.members.length + 1} คน</span>
+      </div>
     </div>
   );
 }
 
+/* ==============================================================================
+   Droppable Column
+   ============================================================================== */
+
+function DroppableColumn({ col, projects, onEdit, onApproveClick, onRejectClick, canApprove }: {
+  col: { id: ColumnId; label: string; color: string };
+  projects: ProjectCard[];
+  onEdit: (p: ProjectCard) => void;
+  onApproveClick: (p: ProjectCard) => void;
+  onRejectClick: (p: ProjectCard) => void;
+  canApprove?: boolean;
+}) {
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: col.id });
+  return (
+    <div ref={setDropRef} className={cn("bg-tu-bg rounded-[--radius-card] border border-tu-border border-t-2 flex flex-col min-h-[300px] overflow-hidden transition-colors", col.color, isOver && "ring-2 ring-tu-primary bg-tu-primary-soft/10")}>
+      <div className="px-4 py-3 flex items-center justify-between shrink-0">
+        <h3 className="text-sm font-semibold text-tu-text-primary">{col.label}</h3>
+        <Badge variant="outline" className="text-[10px]">{projects.length}</Badge>
+      </div>
+      <SortableContext items={projects.map(p => p.id)}>
+        <div className="flex-1 px-3 pb-3 space-y-2 overflow-y-auto">
+          {projects.map(proj => (
+            <SortableCard key={proj.id} project={proj} onEdit={onEdit} onApproveClick={onApproveClick} onRejectClick={onRejectClick} canApprove={canApprove} />
+          ))}
+          {projects.length === 0 && (
+            <div className="flex items-center justify-center h-24 text-xs text-tu-text-muted pointer-events-none">ลากการ์ดมาวางที่นี่</div>
+          )}
+        </div>
+      </SortableContext>
+    </div>
+  );
+}
+
+/* ==============================================================================
+   Main Page
+   ============================================================================== */
+
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<ProjectCard[]>(initialProjects);
+  const [projects, setProjects] = useState<ProjectCard[]>(INITIAL_PROJECTS);
   const [activeProject, setActiveProject] = useState<ProjectCard | null>(null);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<ProjectType | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<ProjectCard | null>(null);
+  const [approveTarget, setApproveTarget] = useState<ProjectCard | null>(null);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+
   const canCreate = useHasPermission("PROJECTS_CREATE");
   const canApprove = useHasPermission("PROJECTS_APPROVE");
   const canEdit = useHasPermission("PROJECTS_EDIT");
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
-  const handleDragStart = (e: DragStartEvent) => setActiveProject(projects.find((p) => p.id === e.active.id) ?? null);
+  const handleDragStart = (e: DragStartEvent) => setActiveProject(projects.find(p => p.id === e.active.id) ?? null);
+
   const handleDragEnd = (e: DragEndEvent) => {
     setActiveProject(null);
     const { active, over } = e;
     if (!over) return;
-    const overCol = columns.find((c) => c.id === String(over.id));
-    if (overCol) { setProjects((prev) => prev.map((p) => (p.id === active.id ? { ...p, column: overCol.id } : p))); return; }
-    const ap = projects.find((p) => p.id === active.id);
-    const op = projects.find((p) => p.id === over.id);
-    if (!ap || !op || ap.column !== op.column) return;
-    const colProjs = projects.filter((p) => p.column === ap.column);
-    const oldIdx = colProjs.findIndex((p) => p.id === active.id);
-    const newIdx = colProjs.findIndex((p) => p.id === over.id);
-    setProjects((prev) => [...prev.filter((p) => p.column !== ap.column), ...arrayMove(colProjs, oldIdx, newIdx)]);
+
+    const overCol = COLUMNS.find(c => c.id === String(over.id));
+    if (overCol) {
+      setProjects(prev => {
+        const dragged = prev.find(p => p.id === active.id);
+        if (!dragged) return prev;
+        const others = prev.filter(p => p.id !== active.id);
+        return [...others, { ...dragged, column: overCol.id, progress: overCol.id === "completed" ? 100 : dragged.progress }];
+      });
+      return;
+    }
+
+    const overProject = projects.find(p => p.id === over.id);
+    if (overProject) {
+      setProjects(prev => {
+        const dragged = prev.find(p => p.id === active.id);
+        if (!dragged) return prev;
+        const others = prev.filter(p => p.id !== active.id);
+        return [...others, { ...dragged, column: overProject.column, progress: overProject.column === "completed" ? 100 : dragged.progress }];
+      });
+    }
   };
 
-  const handleApprove = (id: string) => { setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, column: "completed", progress: 100 } : p))); alert("✅ อนุมัติโครงการแล้ว"); };
-  const handleReject = (id: string) => { setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, column: "planning" } : p))); alert("❌ ปฏิเสธโครงการ — ส่งกลับไปวางแผน"); };
+  const handleApprove = (id: string, reason: string) => {
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, column: "completed", progress: 100, reason } : p));
+  };
 
-  const filtered = projects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()) && (!typeFilter || p.type === typeFilter));
+  const handleReject = (id: string, reason: string) => {
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, column: "planning", reason } : p));
+  };
+
+  const handleCreate = (data: { name: string; type: ProjectType; description: string; startDate: string; deadline: string; members: Member[] }) => {
+    const np: ProjectCard = {
+      id: String(Date.now()), name: data.name, type: data.type, description: data.description,
+      column: "planning", progress: 0, owner: "ฉัน",
+      deadline: data.deadline || new Date().toISOString().slice(0, 10),
+      startDate: data.startDate, members: data.members,
+    };
+    setProjects(prev => [np, ...prev]);
+  };
+
+  const handleEdit = (data: { name: string; type: ProjectType; description: string; startDate: string; deadline: string; members: Member[]; progress?: number }) => {
+    if (!editTarget) return;
+    setProjects(prev => prev.map(p => p.id === editTarget.id ? {
+      ...p, name: data.name, type: data.type, description: data.description,
+      startDate: data.startDate, deadline: data.deadline, members: data.members,
+      progress: data.progress ?? p.progress,
+    } : p));
+    setEditTarget(null);
+  };
+
+  const filtered = projects.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) && (!typeFilter || p.type === typeFilter)
+  );
 
   return (
     <div className="p-6 space-y-4 h-full flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shrink-0">
-        <div><h1 className="text-2xl font-semibold text-tu-text-primary">โครงการ</h1><p className="text-tu-text-muted text-sm mt-1">Kanban Board — ลากวาง + อนุมัติ/ปฏิเสธ</p></div>
-        {canCreate && <Button><Plus size={18} />สร้างโครงการ</Button>}
+        <div><h1 className="text-2xl font-semibold text-tu-text-primary">Projects</h1><p className="text-tu-text-muted text-sm mt-1">Kanban Board — Drag & Drop + Approve / Reject</p></div>
+        {canCreate && <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors"><Plus size={18} />สร้างโครงการ</button>}
       </div>
-      <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-        <div className="relative max-w-md flex-1"><Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" /><input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหา..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface pl-9 pr-4 py-2 text-sm focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 outline-none transition" /></div>
-        <div className="flex gap-1.5 flex-wrap">{[null, "วิชาการ", "หลักสูตร", "สัมมนา", "วิจัย", "IT", "งบประมาณ"].map((t) => (<button key={t ?? "all"} onClick={() => setTypeFilter(t)} className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors border", typeFilter === t ? "bg-tu-primary text-white border-tu-primary" : "bg-tu-surface border-tu-border text-tu-text-secondary hover:bg-tu-surface-hover")}>{t ?? "ทั้งหมด"}</button>))}</div>
+
+      <div className="relative max-w-md shrink-0">
+        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" />
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหา..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface pl-9 pr-4 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 transition" />
       </div>
+
+      <div className="flex gap-1.5 flex-wrap shrink-0">
+        {[null, ...PROJECT_TYPES].map(t => (
+          <button key={t ?? "all"} onClick={() => setTypeFilter(t as ProjectType | null)} className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors border", typeFilter === t ? "bg-tu-primary text-white border-tu-primary" : "bg-tu-surface border-tu-border text-tu-text-secondary hover:bg-tu-surface-hover")}>{t ?? "ทั้งหมด"}</button>
+        ))}
+      </div>
+
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 min-h-0">
-          {columns.map((col) => {
-            const colProjects = filtered.filter((p) => p.column === col.id);
+          {COLUMNS.map(col => {
+            const colProjects = filtered.filter(p => p.column === col.id);
             return (
-              <div key={col.id} className={cn("bg-tu-bg rounded-[--radius-card] border border-tu-border border-t-2 flex flex-col min-h-[200px] overflow-hidden", col.color)}>
-                <div className="px-4 py-3 flex items-center justify-between shrink-0"><h3 className="text-sm font-semibold text-tu-text-primary">{col.label}</h3><Badge variant="outline" className="text-[10px]">{colProjects.length}</Badge></div>
-                <SortableContext items={colProjects.map((p) => p.id)}>
-                  <div className="flex-1 px-3 pb-3 space-y-2 overflow-y-auto">
-                    {colProjects.map((proj) => (<SortableCard key={proj.id} project={proj} onApprove={handleApprove} onReject={handleReject} canApprove={canApprove} canEdit={canEdit} />))}
-                  </div>
-                </SortableContext>
-              </div>
+              <DroppableColumn key={col.id} col={col} projects={colProjects} onEdit={p => setEditTarget(p)}
+                onApproveClick={p => { setApproveTarget(p); setApproveOpen(true); }}
+                onRejectClick={p => { setApproveTarget(p); setRejectOpen(true); }}
+                canApprove={canApprove} />
             );
           })}
         </div>
-        <DragOverlay>{activeProject && (<div className="bg-tu-surface rounded-lg border-2 border-tu-primary p-3 shadow-xl opacity-90 rotate-2 w-64"><h4 className="text-sm font-semibold">{activeProject.name}</h4><p className="text-xs text-tu-text-muted mt-0.5">{activeProject.type} · {activeProject.progress}%</p></div>)}</DragOverlay>
+        <DragOverlay>{activeProject && (
+          <div className="bg-tu-surface rounded-lg border-2 border-tu-primary p-3 shadow-xl opacity-90 rotate-2 w-64"><h4 className="text-sm font-semibold">{activeProject.name}</h4><p className="text-xs text-tu-text-muted mt-0.5">{activeProject.type} · {activeProject.progress}%</p></div>
+        )}</DragOverlay>
       </DndContext>
+
+      <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} onSave={handleCreate} />
+      <ProjectFormModal key={editTarget?.id ?? "create"} open={!!editTarget} onClose={() => setEditTarget(null)} onSave={handleEdit} edit={editTarget ?? undefined} />
+      <ApproveModal open={approveOpen} onClose={() => setApproveOpen(false)} onAction={handleApprove} project={approveTarget} />
+      <RejectModal open={rejectOpen} onClose={() => setRejectOpen(false)} onAction={handleReject} project={approveTarget} />
     </div>
   );
 }

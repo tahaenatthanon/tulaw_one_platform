@@ -1,0 +1,3 @@
+- [x] 1. Remove sidebar from layout
+- [x] 2. Unified page with 4 tabs
+- [x] 3. TypeScript zero errors

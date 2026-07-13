@@ -1,0 +1,7 @@
+- [x] 1. Authentication tab: session timeout, JWT, login attempts, MFA
+- [x] 2. SSO/LDAP tab: LDAP URL, Base DN, Domain
+- [x] 3. UI Branding tab: logo, name, colors
+- [x] 4. Storage & Projects tab: quota, file types, project types CRUD
+- [x] 5. API Keys tab: list/create/revoke with permissions
+- [x] 6. Categories tab: announcement categories + project types CRUD
+- [x] 7. TypeScript zero errors

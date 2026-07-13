@@ -1,0 +1,6 @@
+- [x] 1. Immutable badge + note
+- [x] 2. 8 event types with mock data (100+)
+- [x] 3. Filters: date, type, user, IP
+- [x] 4. Table: Timestamp, User, Type, Detail, IP, Role
+- [x] 5. Export CSV
+- [x] 6. TypeScript zero errors

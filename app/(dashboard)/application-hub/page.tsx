@@ -1,85 +1,24 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import {
   Search, Star, Calculator, FileText, FolderSearch, GraduationCap,
-  Users2, FlaskConical, Scale, CalendarCheck, HelpCircle, Library,
-  ShoppingCart, Box, FileBarChart, ArrowDownToLine, ArrowUpFromLine,
-  Repeat, CheckCheck, GitBranch, ScanEye, ClipboardCheck, Clock,
-  Lightbulb, MessageSquare, BookOpen, CalendarDays, Building2,
-  Grid3X3, List, Wifi, Activity, Server, AlertTriangle,
+  Users2, Grid3X3, List, Wifi, Activity, Server, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHasPermission } from "@/hooks/use-permission";
 
-interface SubModule {
-  name: string; description: string; icon: React.ElementType; online: boolean;
-}
 interface AppGroup {
   id: string; name: string; description: string; icon: React.ElementType;
-  url: string; subs: SubModule[]; online: boolean;
+  online: boolean; userCount: number;
 }
 
 const appGroups: AppGroup[] = [
-  { id: "erp", name: "ERP", description: "ระบบบริหารทรัพยากรองค์กร", icon: Calculator, url: "/application-hub/erp", online: true, subs: [
-    { name: "งบประมาณ", description: "บริหารงบประมาณประจำปี", icon: Calculator, online: true },
-    { name: "การเงิน", description: "ระบบการเงินและบัญชี", icon: Calculator, online: true },
-    { name: "จัดซื้อจัดจ้าง", description: "บริหารงานพัสดุ", icon: ShoppingCart, online: true },
-    { name: "พัสดุ", description: "จัดการครุภัณฑ์", icon: Box, online: false },
-    { name: "รายงาน", description: "รายงานทางการเงิน", icon: FileBarChart, online: false },
-  ]},
-  { id: "e-office", name: "E-Office", description: "ระบบสารบรรณอิเล็กทรอนิกส์", icon: FileText, url: "/application-hub/e-office", online: true, subs: [
-    { name: "หนังสือเข้า", description: "จัดการหนังสือรับเข้า", icon: ArrowDownToLine, online: true },
-    { name: "หนังสือออก", description: "จัดการหนังสือส่งออก", icon: ArrowUpFromLine, online: true },
-    { name: "หนังสือเวียน", description: "จัดการหนังสือเวียน", icon: Repeat, online: true },
-    { name: "อนุมัติเอกสาร", description: "ระบบอนุมัติเวียน", icon: CheckCheck, online: true },
-    { name: "การประชุม", description: "จัดการวาระประชุม", icon: Users2, online: true },
-  ]},
-  { id: "document-management", name: "จัดการเอกสาร", description: "ระบบจัดการเอกสาร DMS", icon: FolderSearch, url: "/application-hub/document-management", online: true, subs: [
-    { name: "คลังกลาง", description: "เอกสารส่วนกลาง", icon: FolderSearch, online: true },
-    { name: "คลังหน่วยงาน", description: "เอกสารภายในหน่วยงาน", icon: Building2, online: true },
-    { name: "ส่วนตัว", description: "พื้นที่ส่วนบุคคล", icon: FolderSearch, online: true },
-    { name: "ประวัติเวอร์ชัน", description: "ติดตามการแก้ไข", icon: GitBranch, online: true },
-    { name: "ค้นหา OCR", description: "ค้นหาด้วย OCR", icon: ScanEye, online: true },
-  ]},
-  { id: "academic", name: "งานวิชาการ", description: "ระบบงานวิชาการ", icon: GraduationCap, url: "/application-hub/academic-management", online: true, subs: [
-    { name: "หลักสูตร", description: "ข้อมูลหลักสูตร", icon: BookOpen, online: true },
-    { name: "รายวิชา", description: "จัดการรายวิชา", icon: GraduationCap, online: true },
-    { name: "ตารางเรียน", description: "ตารางเรียน-สอน", icon: CalendarDays, online: true },
-    { name: "ตารางสอบ", description: "ตารางสอบ", icon: ClipboardCheck, online: true },
-    { name: "คำร้อง", description: "คำร้องนักศึกษา", icon: FileText, online: true },
-  ]},
-  { id: "hr", name: "งานบุคคล", description: "ระบบบริหารทรัพยากรบุคคล", icon: Users2, url: "/application-hub/hr-management", online: true, subs: [
-    { name: "บุคลากร", description: "ข้อมูลบุคลากร", icon: Users2, online: true },
-    { name: "ลางาน", description: "ขอลา-อนุมัติ", icon: CalendarCheck, online: true },
-    { name: "เวลาเข้างาน", description: "บันทึกเวลา", icon: Clock, online: true },
-    { name: "ประเมินผล", description: "ประเมินการทำงาน", icon: ClipboardCheck, online: true },
-    { name: "อบรม", description: "อบรมพัฒนา", icon: GraduationCap, online: true },
-    { name: "เงินเดือน", description: "สลิปเงินเดือน", icon: Calculator, online: true },
-  ]},
-  { id: "research", name: "งานวิจัย", description: "ระบบบริหารงานวิจัย", icon: FlaskConical, url: "/application-hub/research-management", online: true, subs: [
-    { name: "โครงการวิจัย", description: "ติดตามโครงการ", icon: FlaskConical, online: true },
-    { name: "ทุนวิจัย", description: "จัดการทุน", icon: FileText, online: true },
-    { name: "ผลงานตีพิมพ์", description: "รวบรวมผลงาน", icon: BookOpen, online: true },
-    { name: "ทรัพย์สินทางปัญญา", description: "สิทธิบัตร", icon: Lightbulb, online: true },
-    { name: "รายงาน", description: "รายงานวิจัย", icon: FileBarChart, online: true },
-  ]},
-  { id: "legal-clinic", name: "คลินิกกฎหมาย", description: "ระบบคลินิกกฎหมาย", icon: Scale, url: "/application-hub/legal-clinic", online: true, subs: [
-    { name: "คดีความ", description: "จัดการคดี", icon: Scale, online: true },
-    { name: "ทะเบียนลูกความ", description: "ข้อมูลลูกความ", icon: Users2, online: true },
-    { name: "นัดหมาย", description: "นัดหมาย", icon: CalendarCheck, online: true },
-    { name: "ให้คำปรึกษา", description: "บันทึกคำปรึกษา", icon: MessageSquare, online: true },
-    { name: "รายงาน", description: "สถิติคลินิก", icon: FileBarChart, online: true },
-  ]},
-  { id: "book-meeting", name: "จองห้องประชุม", description: "ระบบจองห้องประชุม", icon: CalendarCheck, url: "/application-hub/book-meeting", online: true, subs: [
-    { name: "จองห้อง", description: "จองห้องออนไลน์", icon: CalendarCheck, online: true },
-    { name: "ปฏิทินการจอง", description: "ดูตารางการใช้ห้อง", icon: CalendarDays, online: true },
-  ]},
-  { id: "support", name: "บริการสนับสนุน", description: "Helpdesk & ห้องสมุด", icon: HelpCircle, url: "/application-hub/support-services", online: true, subs: [
-    { name: "Helpdesk", description: "แจ้งปัญหา IT", icon: HelpCircle, online: true },
-    { name: "ห้องสมุด", description: "สืบค้นทรัพยากร", icon: Library, online: true },
-  ]},
+  { id: "erp", name: "ERP", description: "ระบบบริหารทรัพยากรองค์กร", icon: Calculator, online: true, userCount: 45 },
+  { id: "e-office", name: "E-Office", description: "ระบบสารบรรณอิเล็กทรอนิกส์", icon: FileText, online: true, userCount: 62 },
+  { id: "document-management", name: "จัดการเอกสาร", description: "ระบบจัดการเอกสาร", icon: FolderSearch, online: true, userCount: 78 },
+  { id: "academic", name: "งานวิชาการ", description: "ระบบงานวิชาการ", icon: GraduationCap, online: true, userCount: 34 },
+  { id: "hr", name: "งานบุคคล", description: "ระบบบริหารทรัพยากรบุคคล", icon: Users2, online: true, userCount: 28 },
 ];
 
 export default function ApplicationHubPage() {
@@ -90,60 +29,38 @@ export default function ApplicationHubPage() {
     catch { return new Set<string>(); }
   });
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const router = useRouter();
 
-  // Persist to localStorage whenever pinnedIds change
   useEffect(() => {
     localStorage.setItem("hub_pinned", JSON.stringify(Array.from(pinnedIds)));
   }, [pinnedIds]);
 
-  const togglePin = useCallback((id: string) => {
-    setPinnedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }, []);
-
-  // Role-based filter: show only apps the user has permission for
   const canView = {
     erp: useHasPermission("ERP_VIEW"),
     "e-office": useHasPermission("E_OFFICE_VIEW"),
     "document-management": useHasPermission("DOCUMENT_MANAGEMENT_VIEW"),
     academic: useHasPermission("ACADEMIC_VIEW"),
     hr: useHasPermission("HR_VIEW"),
-    research: useHasPermission("RESEARCH_VIEW"),
-    "legal-clinic": useHasPermission("LEGAL_CLINIC_VIEW"),
-    "book-meeting": useHasPermission("BOOK_MEETING_VIEW"),
-    support: useHasPermission("SUPPORT_VIEW"),
   };
 
   const visibleApps = appGroups.filter((a) => canView[a.id as keyof typeof canView]);
-  const filtered = visibleApps.filter((a) => search === "" || a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase()) || a.subs.some((s) => s.name.toLowerCase().includes(search.toLowerCase())));
+  const filtered = visibleApps.filter((a) =>
+    search === "" || a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase())
+  );
   const pinnedApps = filtered.filter((a) => pinnedIds.has(a.id));
   const unpinnedApps = filtered.filter((a) => !pinnedIds.has(a.id));
-
-  const handleAppOpen = useCallback((app: AppGroup) => {
-    const targetUrl = app.url.startsWith("http") ? app.url : `http://localhost:8080${app.url}`;
-    window.location.assign(targetUrl);
-  }, []);
+  if (!canView) return null; // satisfy lint for hook order
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div><h1 className="text-2xl font-semibold text-tu-text-primary">ศูนย์กลางแอปพลิเคชัน</h1><p className="text-tu-text-muted text-sm mt-1">รวมทุกระบบของคณะนิติศาสตร์ไว้ในที่เดียว</p></div>
-        <div className="flex items-center gap-1 bg-tu-surface border border-tu-border rounded-lg p-1">
-          <button onClick={() => setViewMode("grid")} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "grid" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary")}><Grid3X3 size={14} />Grid</button>
-          <button onClick={() => setViewMode("list")} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "list" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary")}><List size={14} />List</button>
-        </div>
-      </div>
+      {/* Header */}
+      <div><h1 className="text-2xl font-semibold text-tu-text-primary">ศูนย์กลางแอปพลิเคชัน</h1><p className="text-tu-text-muted text-sm mt-1">รวมระบบงานทั้งหมดของคณะนิติศาสตร์ไว้ในจุดเดียว</p></div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "ระบบทั้งหมด", value: visibleApps.length.toString(), sub: visibleApps.length === 9 ? "9 หมวดหมู่" : `${visibleApps.length} หมวดหมู่`, icon: Server, c: "text-tu-primary", b: "bg-tu-primary-soft" },
-          { label: "Active Users", value: "24", sub: "วันนี้", icon: Activity, c: "text-tu-success", b: "bg-tu-success/10" },
-          { label: "ระบบออนไลน์", value: String(visibleApps.filter(a => a.online).length), sub: `${Math.round((visibleApps.filter(a => a.online).length / Math.max(1, visibleApps.length)) * 100)}%`, icon: Wifi, c: "text-tu-info", b: "bg-tu-info/10" },
+          { label: "ระบบทั้งหมด", value: visibleApps.length.toString(), sub: `${visibleApps.length} หมวดหมู่`, icon: Server, c: "text-tu-primary", b: "bg-tu-primary-soft" },
+          { label: "กำลังออนไลน์", value: String(visibleApps.filter(a => a.online).length), sub: `${Math.round((visibleApps.filter(a => a.online).length / Math.max(1, visibleApps.length)) * 100)}%`, icon: Wifi, c: "text-tu-info", b: "bg-tu-info/10" },
+          { label: "Active Users", value: String(visibleApps.reduce((s, a) => s + a.userCount, 0)), sub: "วันนี้", icon: Activity, c: "text-tu-success", b: "bg-tu-success/10" },
           { label: "บำรุงรักษา", value: String(visibleApps.filter(a => !a.online).length), sub: visibleApps.filter(a => !a.online).map(a => a.name).join(", ") || "0", icon: AlertTriangle, c: "text-tu-warning", b: "bg-tu-warning/10" },
         ].map((s) => (
           <div key={s.label} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 flex items-center gap-3">
@@ -153,58 +70,90 @@ export default function ApplicationHubPage() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md"><Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" /><input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาแอปพลิเคชัน..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-tu-border-focus/20 outline-none transition" /></div>
+      {/* Search + Grid/List Toggle */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative max-w-sm flex-1"><Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" /><input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาแอปพลิเคชัน..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-tu-border-focus/20 outline-none transition" /></div>
+        <div className="flex items-center gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5 shrink-0">
+          <button onClick={() => setViewMode("grid")} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "grid" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary")}><Grid3X3 size={14} />Grid</button>
+          <button onClick={() => setViewMode("list")} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "list" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary")}><List size={14} />List</button>
+        </div>
+      </div>
 
       {/* Pinned */}
       {pinnedApps.length > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-tu-text-secondary mb-3 flex items-center gap-2"><Star size={16} className="text-tu-secondary" />ปักหมุด</h2>
-          <div className={cn(viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" : "space-y-2")}>
-            {pinnedApps.map((a) => <AppGroupCard key={a.id} app={a} viewMode={viewMode} isPinned onTogglePin={() => togglePin(a.id)} onOpen={() => handleAppOpen(a)} />)}
+          <div className={cn(viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" : "space-y-2")}>
+            {pinnedApps.map((a) => <AppCard key={a.id} app={a} viewMode={viewMode} isPinned onTogglePin={() => setPinnedIds(prev => { const n = new Set(prev); n.has(a.id) ? n.delete(a.id) : n.add(a.id); return n; })} />)}
           </div>
         </div>
       )}
 
-      {/* All */}
+      {/* All Apps */}
       <div>
-        {pinnedApps.length > 0 && <h2 className="text-sm font-semibold text-tu-text-secondary mb-3">แอปพลิเคชันทั้งหมด</h2>}
+        {pinnedApps.length > 0 && <h2 className="text-sm font-semibold text-tu-text-secondary mb-3">ระบบงานทั้งหมด</h2>}
         {unpinnedApps.length === 0 && pinnedApps.length === 0 ? (
           <div className="text-center py-16 text-tu-text-muted"><Search size={48} className="mx-auto mb-3 opacity-30" /><p>ไม่พบ</p></div>
         ) : (
-          <div className={cn(viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" : "space-y-2")}>
-            {unpinnedApps.map((a) => <AppGroupCard key={a.id} app={a} viewMode={viewMode} isPinned={false} onTogglePin={() => togglePin(a.id)} onOpen={() => handleAppOpen(a)} />)}
+          <div className={cn(viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" : "space-y-2")}>
+            {unpinnedApps.map((a) => <AppCard key={a.id} app={a} viewMode={viewMode} isPinned={false} onTogglePin={() => setPinnedIds(prev => { const n = new Set(prev); n.has(a.id) ? n.delete(a.id) : n.add(a.id); return n; })} />)}
           </div>
         )}
       </div>
-
     </div>
   );
 }
 
-function AppGroupCard({ app, viewMode, isPinned, onTogglePin, onOpen }: { app: AppGroup; viewMode: "grid" | "list"; isPinned: boolean; onTogglePin: () => void; onOpen: () => void }) {
+/* ==============================================================================
+   AppCard — Grid / List
+   ============================================================================== */
+
+function AppCard({ app, viewMode, isPinned, onTogglePin }: {
+  app: AppGroup; viewMode: "grid" | "list"; isPinned: boolean; onTogglePin: () => void;
+}) {
   if (viewMode === "list") {
     return (
-      <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border hover:border-tu-primary/30 transition-all cursor-pointer" onClick={onOpen}>
+      <div className="group bg-tu-surface rounded-[--radius-card] border border-tu-border hover:shadow-md transition-all">
         <div className="flex items-center gap-3 p-4">
-          <div className="relative shrink-0"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-tu-primary-soft"><app.icon size={20} className="text-tu-primary" /></div><span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-tu-surface ${app.online ? "bg-tu-success" : "bg-tu-warning"}`} /></div>
+          <div className="relative shrink-0">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-tu-primary-soft"><app.icon size={22} className="text-tu-primary" /></div>
+            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-tu-surface ${app.online ? "bg-tu-success" : "bg-tu-warning"}`} />
+          </div>
           <div className="flex-1 min-w-0"><span className="text-sm font-semibold text-tu-text-primary">{app.name}</span><p className="text-xs text-tu-text-muted">{app.description}</p></div>
-          <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="p-1.5 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft"><Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} /></button>
+          <div className="text-right shrink-0 text-xs text-tu-text-muted">
+            <p className="flex items-center gap-1"><Users2 size={12} />{app.userCount} users</p>
+            <p className={app.online ? "text-tu-success" : "text-tu-warning"}>{app.online ? "● Online" : "● Offline"}</p>
+          </div>
+          <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all"><Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} /></button>
         </div>
       </div>
     );
   }
+
   return (
-    <div className="group bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 hover:shadow-md hover:border-tu-primary/30 transition-all cursor-pointer" onClick={onOpen}>
-      <div className="flex items-start gap-3 mb-2">
-        <div className="relative"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-tu-primary-soft"><app.icon size={20} className="text-tu-primary" /></div><span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-tu-surface ${app.online ? "bg-tu-success" : "bg-tu-warning"}`} /></div>
-        <div className="flex-1 min-w-0"><h3 className="text-sm font-semibold text-tu-text-primary">{app.name}</h3><p className="text-xs text-tu-text-muted mt-0.5">{app.description}</p></div>
-        <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="p-1 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft shrink-0"><Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} /></button>
+    <div className="group relative bg-tu-surface rounded-[--radius-card] border border-tu-border p-5 hover:shadow-md transition-all flex flex-col items-center text-center">
+      {/* Pin — hover only */}
+      <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all">
+        <Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} />
+      </button>
+
+      {/* Icon + status dot */}
+      <div className="relative mb-3">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-tu-primary-soft">
+          <app.icon size={28} className="text-tu-primary" />
+        </div>
+        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-tu-surface ${app.online ? "bg-tu-success" : "bg-tu-warning"}`} />
       </div>
-      <div className="flex flex-wrap gap-1 mb-1">
-        {app.subs.slice(0, 5).map((s) => (<span key={s.name} className="text-[10px] px-1.5 py-0.5 rounded-full bg-tu-bg text-tu-text-secondary">{s.name}</span>))}
-        {app.subs.length > 5 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-tu-bg text-tu-text-muted">+{app.subs.length - 5}</span>}
-      </div>
+
+      {/* Name */}
+      <h3 className="text-sm font-semibold text-tu-text-primary mb-1">{app.name}</h3>
+
+      {/* Description */}
+      <p className="text-xs text-tu-text-muted mb-3">{app.description}</p>
+
+      {/* Users + Status */}
+      <p className="text-xs text-tu-text-muted flex items-center gap-1 mb-1"><Users2 size={12} />{app.userCount} users</p>
+      <p className={cn("text-xs font-medium", app.online ? "text-tu-success" : "text-tu-warning")}>{app.online ? "● Online" : "● Offline"}</p>
     </div>
   );
 }
