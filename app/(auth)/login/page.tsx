@@ -34,19 +34,27 @@ function LoginPageContent() {
     setError("");
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
 
-    setLoading(false);
-
-    if (result?.error) {
-      setError(result.error);
-    } else {
-      router.push(callbackUrl);
-      router.refresh();
+      if (result?.error) {
+        setError(result.error);
+      } else if (result?.ok) {
+        router.push(callbackUrl);
+        router.refresh();
+      } else {
+        setError("ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง");
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง";
+      setError(message);
+    } finally {
+      setLoading(false);
     }
   }
 
