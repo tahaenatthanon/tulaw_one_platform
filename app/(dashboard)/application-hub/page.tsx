@@ -6,7 +6,8 @@ import {
   Users2, Grid3X3, List, Wifi, Activity, Server, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useHasPermission } from "@/hooks/use-permission";
+import { useHasPermission, useHasMinRoleLevel } from "@/hooks/use-permission";
+import { useUrlState } from "@/hooks/use-url-state";
 
 interface AppGroup {
   id: string; name: string; description: string; icon: React.ElementType;
@@ -22,13 +23,13 @@ const appGroups: AppGroup[] = [
 ];
 
 export default function ApplicationHubPage() {
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useUrlState("search", "");
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set<string>();
     try { return new Set(JSON.parse(localStorage.getItem("hub_pinned") || "[]")); }
     catch { return new Set<string>(); }
   });
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useUrlState<"grid" | "list">("view", "grid");
 
   useEffect(() => {
     localStorage.setItem("hub_pinned", JSON.stringify(Array.from(pinnedIds)));
@@ -41,6 +42,8 @@ export default function ApplicationHubPage() {
     academic: useHasPermission("ACADEMIC_VIEW"),
     hr: useHasPermission("HR_VIEW"),
   };
+
+  const canPin = useHasMinRoleLevel(30); // Viewer (level 10) cannot pin
 
   const visibleApps = appGroups.filter((a) => canView[a.id as keyof typeof canView]);
   const filtered = visibleApps.filter((a) =>
@@ -84,7 +87,7 @@ export default function ApplicationHubPage() {
         <div>
           <h2 className="text-sm font-semibold text-tu-text-secondary mb-3 flex items-center gap-2"><Star size={16} className="text-tu-secondary" />ปักหมุด</h2>
           <div className={cn(viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" : "space-y-2")}>
-            {pinnedApps.map((a) => <AppCard key={a.id} app={a} viewMode={viewMode} isPinned onTogglePin={() => setPinnedIds(prev => { const n = new Set(prev); n.has(a.id) ? n.delete(a.id) : n.add(a.id); return n; })} />)}
+            {pinnedApps.map((a) => <AppCard key={a.id} app={a} viewMode={viewMode} isPinned onTogglePin={() => setPinnedIds(prev => { const n = new Set(prev); n.has(a.id) ? n.delete(a.id) : n.add(a.id); return n; })} canPin={canPin} />)}
           </div>
         </div>
       )}
@@ -96,7 +99,7 @@ export default function ApplicationHubPage() {
           <div className="text-center py-16 text-tu-text-muted"><Search size={48} className="mx-auto mb-3 opacity-30" /><p>ไม่พบ</p></div>
         ) : (
           <div className={cn(viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" : "space-y-2")}>
-            {unpinnedApps.map((a) => <AppCard key={a.id} app={a} viewMode={viewMode} isPinned={false} onTogglePin={() => setPinnedIds(prev => { const n = new Set(prev); n.has(a.id) ? n.delete(a.id) : n.add(a.id); return n; })} />)}
+            {unpinnedApps.map((a) => <AppCard key={a.id} app={a} viewMode={viewMode} isPinned={false} onTogglePin={() => setPinnedIds(prev => { const n = new Set(prev); n.has(a.id) ? n.delete(a.id) : n.add(a.id); return n; })} canPin={canPin} />)}
           </div>
         )}
       </div>
@@ -108,8 +111,8 @@ export default function ApplicationHubPage() {
    AppCard — Grid / List
    ============================================================================== */
 
-function AppCard({ app, viewMode, isPinned, onTogglePin }: {
-  app: AppGroup; viewMode: "grid" | "list"; isPinned: boolean; onTogglePin: () => void;
+function AppCard({ app, viewMode, isPinned, onTogglePin, canPin }: {
+  app: AppGroup; viewMode: "grid" | "list"; isPinned: boolean; onTogglePin: () => void; canPin: boolean;
 }) {
   if (viewMode === "list") {
     return (
@@ -124,7 +127,9 @@ function AppCard({ app, viewMode, isPinned, onTogglePin }: {
             <p className="flex items-center gap-1"><Users2 size={12} />{app.userCount} users</p>
             <p className={app.online ? "text-tu-success" : "text-tu-warning"}>{app.online ? "● Online" : "● Offline"}</p>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all"><Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} /></button>
+          {canPin && (
+            <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all"><Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} /></button>
+          )}
         </div>
       </div>
     );
@@ -132,10 +137,12 @@ function AppCard({ app, viewMode, isPinned, onTogglePin }: {
 
   return (
     <div className="group relative bg-tu-surface rounded-[--radius-card] border border-tu-border p-5 hover:shadow-md transition-all flex flex-col items-center text-center">
-      {/* Pin — hover only */}
-      <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all">
-        <Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} />
-      </button>
+      {/* Pin — hover only (hidden for Viewer) */}
+      {canPin && (
+        <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all">
+          <Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} />
+        </button>
+      )}
 
       {/* Icon + status dot */}
       <div className="relative mb-3">

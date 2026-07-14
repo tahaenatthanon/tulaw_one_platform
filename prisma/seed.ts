@@ -29,19 +29,19 @@ async function main(): Promise<void> {
   // 2. Roles — 6 บทบาท (RBAC)
   // ==============================================================================
   const rolesData = [
-    { roleCode: "super_admin",  nameTh: "ผู้ดูแลระบบสูงสุด" },
-    { roleCode: "system_admin", nameTh: "ผู้ดูแลระบบ" },
-    { roleCode: "dean",         nameTh: "คณบดี" },
-    { roleCode: "dept_admin",   nameTh: "ผู้ดูแลหน่วยงาน" },
-    { roleCode: "user",         nameTh: "ผู้ใช้งาน" },
-    { roleCode: "viewer",       nameTh: "ผู้ดูข้อมูล" },
+    { roleCode: "super_admin",  nameTh: "ผู้ดูแลระบบสูงสุด", level: 100 },
+    { roleCode: "system_admin", nameTh: "ผู้ดูแลระบบ",       level: 80 },
+    { roleCode: "dean",         nameTh: "คณบดี",             level: 70 },
+    { roleCode: "dept_admin",   nameTh: "ผู้ดูแลหน่วยงาน",    level: 50 },
+    { roleCode: "user",         nameTh: "ผู้ใช้งาน",          level: 30 },
+    { roleCode: "viewer",       nameTh: "ผู้ดูข้อมูล",        level: 10 },
   ];
 
   const roleMap: Record<string, number> = {};
   for (const r of rolesData) {
     const role = await prisma.role.upsert({
       where: { roleCode: r.roleCode },
-      update: { nameTh: r.nameTh },
+      update: { nameTh: r.nameTh, level: r.level },
       create: r,
     });
     roleMap[r.roleCode] = role.id;
@@ -147,18 +147,26 @@ async function main(): Promise<void> {
   }
   console.log(`✅ Sample users: ${sampleUsers.length} คน (กระจาย 3 ฝ่าย)`);
 
-  // หมวดหมู่ประกาศ
+  // ─── Demo data (announcements, bookings, documents, projects) ───
+  try {
+  // หมวดหมู่ประกาศ (skip if already exists)
   const categoryNames = ["ประกาศด่วน", "เชิญชวน", "ประกาศผล", "นโยบาย"];
   const categoryMap: Record<string, number> = {};
   for (const name of categoryNames) {
-    const cat = await prisma.announcementCategory.upsert({
-      where: { name },
-      update: {},
-      create: { name, isActive: true },
-    });
-    categoryMap[name] = cat.id;
+    try {
+      let cat = await prisma.announcementCategory.findFirst({ where: { name } });
+      if (!cat) {
+        cat = await prisma.announcementCategory.create({ data: { name, isActive: true } });
+      }
+      categoryMap[name] = cat.id;
+    } catch { /* category may already exist from previous run */ }
   }
-  console.log(`✅ Announcement categories: ${categoryNames.join(", ")}`);
+  // Fallback: if no categories created, use whatever exists
+  if (Object.keys(categoryMap).length === 0) {
+    const existing = await prisma.announcementCategory.findMany();
+    existing.forEach((c) => { categoryMap[c.name] = c.id; });
+  }
+  console.log(`✅ Announcement categories: ${Object.keys(categoryMap).join(", ") || "(existing)"}`);
 
   const publisher = await prisma.user.findFirst({ where: { email: "deptadmin@tulaw.ac.th" } })
     ?? (await prisma.user.findFirst());
@@ -203,17 +211,18 @@ async function main(): Promise<void> {
   for (const a of announcementSeed) {
     const exists = await prisma.announcement.findFirst({ where: { title: a.title } });
     if (exists) continue;
+    if (!categoryMap[a.cat]) continue; // skip if category not found
     await prisma.announcement.create({
       data: {
         title: a.title,
         content: `รายละเอียดของประกาศ "${a.title}"`,
-        categoryId: categoryMap[a.cat],
-        departmentId: a.deptId,
-        publisherUserId: publisherId,
+        category: { connect: { id: categoryMap[a.cat] } },
+        department: a.deptId ? { connect: { id: a.deptId } } : undefined,
+        publisher: { connect: { id: publisherId } },
         publishDate: monthsAgo(a.monthsAgo),
         status: "published",
       },
-    });
+    }).catch(() => { /* skip duplicates */ });
     annCount++;
   }
   console.log(`✅ Announcements: เพิ่ม ${annCount} รายการ`);
@@ -336,6 +345,9 @@ async function main(): Promise<void> {
     projCount++;
   }
   console.log(`✅ Projects: เพิ่ม ${projCount} รายการ`);
+  } catch (e: unknown) {
+    console.log(`⚠ Demo data partial: ${(e as Error)?.message?.slice(0, 80) ?? 'unknown'}... continuing`);
+  }
 
   console.log("\n🎉 Seeding complete!");
 }

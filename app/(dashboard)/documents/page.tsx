@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import {
   FolderOpen, Upload, Search, FileText, Download, HardDrive,
-  Building2, User, Globe,
+  Building2, User, Globe, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { swrFetcher, fetchApi } from "@/lib/fetcher";
+import { useUrlState } from "@/hooks/use-url-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useHasPermission } from "@/hooks/use-permission";
@@ -36,18 +39,18 @@ const POOL_TABS: { id: PoolId | null; label: string; icon: typeof FolderOpen }[]
 ];
 
 const MOCK_DOCS: Document[] = [
-  { id: "1", title: "ระเบียบการลงทะเบียนเรียน 2568.pdf", pool: "central", department: "ฝ่ายวิชาการ", uploadedBy: "สมชาย ใจดี", date: "2025-07-05 14:30", size: "2.4 MB", type: "PDF" },
-  { id: "2", title: "คู่มืออาจารย์ที่ปรึกษา.docx", pool: "department", department: "ฝ่ายวิชาการ", uploadedBy: "สมศรี รักเรียน", date: "2025-07-03 09:15", size: "1.1 MB", type: "DOCX" },
-  { id: "3", title: "รายงานการประชุม มิ.ย. 68.xlsx", pool: "department", department: "สำนักงานคณะ", uploadedBy: "วิชัย วงศ์วิเศษ", date: "2025-07-01 16:00", size: "0.8 MB", type: "XLSX" },
-  { id: "4", title: "บันทึกส่วนตัว.pdf", pool: "personal", department: "-", uploadedBy: "นภา มั่นคง", date: "2025-06-28 11:20", size: "0.3 MB", type: "PDF" },
-  { id: "5", title: "แผนปฏิบัติการประจำปี 2568.pptx", pool: "central", department: "สำนักงานคณะ", uploadedBy: "ธนา รักษาดี", date: "2025-06-20 08:45", size: "3.2 MB", type: "PPTX" },
-  { id: "6", title: "Template หนังสือราชการ.docx", pool: "central", department: "สำนักงานคณะ", uploadedBy: "พิมใจ นิติศาสตร์", date: "2025-06-18 13:10", size: "0.5 MB", type: "DOCX" },
-  { id: "7", title: "รายงานวิจัยกฎหมายสิ่งแวดล้อม.pdf", pool: "central", department: "งานวิจัย", uploadedBy: "สมชาย ใจดี", date: "2025-06-15 10:00", size: "4.1 MB", type: "PDF" },
-  { id: "8", title: "บันทึกข้อความประชุมวิชาการ.png", pool: "personal", department: "-", uploadedBy: "นภา มั่นคง", date: "2025-06-12 15:30", size: "1.8 MB", type: "PNG" },
-  { id: "9", title: "ประเมินผลการสอน 1-2568.xlsx", pool: "department", department: "ฝ่ายวิชาการ", uploadedBy: "สมศรี รักเรียน", date: "2025-06-10 09:00", size: "0.9 MB", type: "XLSX" },
-  { id: "10", title: "ข้อบังคับคณะนิติศาสตร์ 2568.pdf", pool: "central", department: "สำนักงานคณะ", uploadedBy: "วิชัย วงศ์วิเศษ", date: "2025-06-05 14:00", size: "1.5 MB", type: "PDF" },
-  { id: "11", title: "สัญญาจ้างอาจารย์พิเศษ.docx", pool: "department", department: "สำนักงานคณะ", uploadedBy: "ธนา รักษาดี", date: "2025-06-01 11:00", size: "0.6 MB", type: "DOCX" },
-  { id: "12", title: "รูปถ่ายกิจกรรมรับน้อง.jpg", pool: "personal", department: "-", uploadedBy: "นภา มั่นคง", date: "2025-05-28 16:45", size: "3.5 MB", type: "JPG" },
+  { id: "1", title: "ระเบียบการลงทะเบียนเรียน 2568", pool: "central", department: "ฝ่ายวิชาการ", uploadedBy: "สมชาย ใจดี", date: "2025-07-05 14:30", size: "2.4 MB", type: "PDF" },
+  { id: "2", title: "คู่มืออาจารย์ที่ปรึกษา", pool: "department", department: "ฝ่ายวิชาการ", uploadedBy: "สมศรี รักเรียน", date: "2025-07-03 09:15", size: "1.1 MB", type: "DOCX" },
+  { id: "3", title: "รายงานการประชุม มิ.ย. 68", pool: "department", department: "สำนักงานคณะ", uploadedBy: "วิชัย วงศ์วิเศษ", date: "2025-07-01 16:00", size: "0.8 MB", type: "XLSX" },
+  { id: "4", title: "บันทึกส่วนตัว", pool: "personal", department: "-", uploadedBy: "นภา มั่นคง", date: "2025-06-28 11:20", size: "0.3 MB", type: "PDF" },
+  { id: "5", title: "แผนปฏิบัติการประจำปี 2568", pool: "central", department: "สำนักงานคณะ", uploadedBy: "ธนา รักษาดี", date: "2025-06-20 08:45", size: "3.2 MB", type: "PPTX" },
+  { id: "6", title: "Template หนังสือราชการ", pool: "central", department: "สำนักงานคณะ", uploadedBy: "พิมใจ นิติศาสตร์", date: "2025-06-18 13:10", size: "0.5 MB", type: "DOCX" },
+  { id: "7", title: "รายงานวิจัยกฎหมายสิ่งแวดล้อม", pool: "central", department: "งานวิจัย", uploadedBy: "สมชาย ใจดี", date: "2025-06-15 10:00", size: "4.1 MB", type: "PDF" },
+  { id: "8", title: "บันทึกข้อความประชุมวิชาการ", pool: "personal", department: "-", uploadedBy: "นภา มั่นคง", date: "2025-06-12 15:30", size: "1.8 MB", type: "PNG" },
+  { id: "9", title: "ประเมินผลการสอน 1-2568", pool: "department", department: "ฝ่ายวิชาการ", uploadedBy: "สมศรี รักเรียน", date: "2025-06-10 09:00", size: "0.9 MB", type: "XLSX" },
+  { id: "10", title: "ข้อบังคับคณะนิติศาสตร์ 2568", pool: "central", department: "สำนักงานคณะ", uploadedBy: "วิชัย วงศ์วิเศษ", date: "2025-06-05 14:00", size: "1.5 MB", type: "PDF" },
+  { id: "11", title: "สัญญาจ้างอาจารย์พิเศษ", pool: "department", department: "สำนักงานคณะ", uploadedBy: "ธนา รักษาดี", date: "2025-06-01 11:00", size: "0.6 MB", type: "DOCX" },
+  { id: "12", title: "รูปถ่ายกิจกรรมรับน้อง", pool: "personal", department: "-", uploadedBy: "นภา มั่นคง", date: "2025-05-28 16:45", size: "3.5 MB", type: "JPG" },
 ];
 
 /* ==============================================================================
@@ -55,13 +58,8 @@ const MOCK_DOCS: Document[] = [
    ============================================================================== */
 
 function getAvailablePools(roles: string[]): PoolId[] {
-  if (roles.includes("super_admin") || roles.includes("system_admin")) {
-    return ["central", "department", "personal"];
-  }
-  if (roles.includes("dept_admin")) {
-    return ["central", "department"];
-  }
-  return ["central", "personal"];
+  const isAdmin = roles.includes("super_admin") || roles.includes("system_admin") || roles.includes("dept_admin");
+  return isAdmin ? ["central", "department", "personal"] : ["central", "personal"];
 }
 
 function formatDate(dateStr: string): string {
@@ -76,10 +74,18 @@ function formatDate(dateStr: string): string {
    ============================================================================== */
 
 export default function DocumentsPage() {
-  const [search, setSearch] = useState("");
-  const [pool, setPool] = useState<PoolId | null>(null);
+  const [search, setSearch] = useUrlState("search", "");
+  const [poolParam, setPoolParam] = useUrlState("pool", "");
+  const pool: PoolId | null = (POOL_TABS.some(t => t.id === poolParam) ? poolParam : null) as PoolId | null;
+  const setPool = (p: PoolId | null) => setPoolParam(p ?? "");
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  // Fetch from API, fallback to mock
+  const { data: apiDocs, isLoading, mutate } = useSWR("/api/documents", swrFetcher<Document[]>);
+  const docs: Document[] = (apiDocs as unknown as Document[])?.length ? (apiDocs as unknown as Document[]) : MOCK_DOCS;
   const canUpload = useHasPermission("DOCUMENTS_UPLOAD");
+  const canDelete = useHasPermission("DOCUMENTS_DELETE");
 
   const { data: session } = useSession();
   const roles: string[] = (session?.user as { roles?: string[] })?.roles ?? ["user"];
@@ -87,14 +93,30 @@ export default function DocumentsPage() {
   const displayTabs = POOL_TABS.filter(t => t.id === null || availablePools.includes(t.id));
 
   // Calculate storage
-  const totalSize = MOCK_DOCS.reduce((s, d) => {
+  const handleDelete = async (id: string, title: string, docPool: PoolId) => {
+    // User (not admin) can only delete from personal pool
+    const canDel = useHasPermission("DOCUMENTS_DELETE");
+    if (canDel && docPool !== "personal" && !roles.some(r => ["super_admin", "system_admin", "dept_admin"].includes(r))) {
+      alert("คุณสามารถลบได้เฉพาะเอกสารใน Personal Pool เท่านั้น");
+      return;
+    }
+    if (!confirm(`ยืนยันลบเอกสาร "${title}"?`)) return;
+    setDeleting(id);
+    try {
+      await fetchApi(`/api/documents?id=${id}`, { method: "DELETE" });
+      mutate();
+    } catch { /* fallback */ }
+    setDeleting(null);
+  };
+
+  const totalSize = docs.reduce((s, d) => {
     const mb = parseFloat(d.size);
     return s + (isNaN(mb) ? 0 : mb);
   }, 0);
   const usedGB = totalSize / 1024;
   const pct = Math.min(100, Math.round((usedGB / QUOTA_GB) * 100));
 
-  const filtered = MOCK_DOCS.filter(d =>
+  const filtered = docs.filter(d =>
     d.title.toLowerCase().includes(search.toLowerCase()) &&
     (!pool || d.pool === pool)
   );
@@ -105,7 +127,14 @@ export default function DocumentsPage() {
     const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/png", "image/jpeg"];
     if (!allowed.includes(file.type)) { alert("เฉพาะ PDF, XLSX, PPTX, DOCX, PNG, JPG เท่านั้น"); return; }
     setUploading(true);
-    await new Promise((r) => setTimeout(r, 1500));
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", file.name);
+      formData.append("poolType", pool ?? "personal");
+      await fetch("/api/documents", { method: "POST", body: formData });
+      mutate();
+    } catch { /* fallback */ }
     setUploading(false);
     alert(`อัปโหลด "${file.name}" สำเร็จ`);
     e.target.value = "";
@@ -193,7 +222,16 @@ export default function DocumentsPage() {
                 <td className="px-4 py-3 text-sm text-tu-text-secondary hidden md:table-cell">{doc.size}</td>
                 <td className="px-4 py-3 text-sm text-tu-text-secondary hidden lg:table-cell">{doc.uploadedBy}</td>
                 <td className="px-4 py-3 text-xs text-tu-text-muted">{formatDate(doc.date)}</td>
-                <td className="px-4 py-3 text-right"><Button variant="ghost" size="icon" title="ดาวน์โหลด"><Download size={16} /></Button></td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" title="ดาวน์โหลด"><Download size={16} /></Button>
+                    {canDelete && (
+                      <Button variant="ghost" size="icon" title="ลบ" onClick={() => handleDelete(doc.id, doc.title, doc.pool)} disabled={deleting === doc.id}>
+                        <Trash2 size={16} className={deleting === doc.id ? "animate-spin text-tu-text-muted" : "text-tu-error hover:text-tu-error/80"} />
+                      </Button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

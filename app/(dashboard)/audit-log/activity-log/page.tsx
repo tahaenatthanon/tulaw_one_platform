@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useUrlState } from "@/hooks/use-url-state";
 import { Search, Shield, Lock, Download, Filter, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -106,10 +107,10 @@ function getPageNumbers(page: number, totalPages: number): number[] {
    ============================================================================== */
 
 export default function ActivityLogPage() {
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [userFilter, setUserFilter] = useState("");
-  const [ipFilter, setIpFilter] = useState("");
+  const [search, setSearch] = useUrlState("search", "");
+  const [typeFilter, setTypeFilter] = useUrlState("action", "");
+  const [userFilter, setUserFilter] = useUrlState("user", "");
+  const [ipFilter, setIpFilter] = useUrlState("ip", "");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);

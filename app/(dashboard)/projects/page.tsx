@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import useSWR from "swr";
+import { swrFetcher, fetchApi } from "@/lib/fetcher";
+import { useUrlState } from "@/hooks/use-url-state";
 import {
   DndContext, DragOverlay, closestCorners,
   KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -11,6 +14,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { Plus, Search, GripVertical, Calendar, Users, CheckCircle, XCircle, Check, Trash2, UserPlus, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { UserSearchCombobox } from "@/components/shared/user-search-combobox";
 import { useHasPermission } from "@/hooks/use-permission";
 
 /* ==============================================================================
@@ -18,7 +23,7 @@ import { useHasPermission } from "@/hooks/use-permission";
    ============================================================================== */
 
 type ColumnId = "planning" | "in_progress" | "pending_approval" | "completed";
-type ProjectType = "วิชาการ" | "หลักสูตร" | "สัมมนา" | "วิจัย" | "IT" | "งบประมาณ";
+type ProjectType = "วิชาการ" | "หลักสูตร" | "สัมมนา" | "IT" | "งบประมาณ";
 
 interface Member { name: string; role: string; }
 
@@ -35,18 +40,7 @@ const COLUMNS: { id: ColumnId; label: string; color: string }[] = [
   { id: "completed", label: "Completed", color: "border-t-tu-success" },
 ];
 
-const PROJECT_TYPES: ProjectType[] = ["วิชาการ", "หลักสูตร", "สัมมนา", "วิจัย", "IT", "งบประมาณ"];
-
-const INITIAL_PROJECTS: ProjectCard[] = [
-  { id: "1", name: "พัฒนาระบบฐานข้อมูลกฎหมาย", description: "สืบค้นกฎหมายดิจิทัล", type: "IT", column: "in_progress", progress: 65, owner: "วิชัย", deadline: "2025-09-30", startDate: "2025-03-01", members: [{ name: "วิชัย", role: "Project Lead" }, { name: "สมชาย", role: "Developer" }, { name: "นภา", role: "Tester" }] },
-  { id: "2", name: "ปรับปรุงหลักสูตร ป.ตรี 2569", description: "อัปเดตหลักสูตร", type: "หลักสูตร", column: "planning", progress: 20, owner: "สมศรี", deadline: "2025-12-15", startDate: "2025-06-01", members: [{ name: "สมศรี", role: "Project Lead" }, { name: "พิมพ์ใจ", role: "Coordinator" }] },
-  { id: "3", name: "สัมมนากฎหมายระหว่างประเทศ", description: "สัมมนาเชิงปฏิบัติการ", type: "สัมมนา", column: "in_progress", progress: 80, owner: "สมชาย", deadline: "2025-08-20", startDate: "2025-05-01", members: [{ name: "สมชาย", role: "Organizer" }, { name: "ธนา", role: "Speaker" }] },
-  { id: "4", name: "จัดทำรายงานประจำปี 2568", description: "รายงานผลการดำเนินงาน", type: "งบประมาณ", column: "pending_approval", progress: 95, owner: "ผู้ดูแล", deadline: "2025-07-30", startDate: "2025-01-01", members: [{ name: "ผู้ดูแล", role: "Author" }, { name: "วิชัย", role: "Reviewer" }] },
-  { id: "5", name: "อบรม PDPA บุคลากร", description: "กฎหมายคุ้มครองข้อมูล", type: "วิชาการ", column: "planning", progress: 10, owner: "นภา", deadline: "2025-10-01", startDate: "2025-07-01", members: [{ name: "นภา", role: "Trainer" }] },
-  { id: "6", name: "พัฒนาเว็บไซต์คณะใหม่", description: "รีดีไซน์ UI/UX", type: "IT", column: "in_progress", progress: 40, owner: "ธนา", deadline: "2025-11-01", startDate: "2025-04-01", members: [{ name: "ธนา", role: "Developer" }, { name: "วิชัย", role: "Designer" }] },
-  { id: "7", name: "ขอทุนวิจัยกฎหมายสิ่งแวดล้อม", description: "เสนอโครงการวิจัย", type: "วิจัย", column: "pending_approval", progress: 70, owner: "สมศรี", deadline: "2025-08-15", startDate: "2025-05-15", members: [{ name: "สมศรี", role: "Researcher" }, { name: "สมชาย", role: "Co-Researcher" }] },
-  { id: "8", name: "ประเมินการสอน 1/2568", description: "ประเมินอาจารย์", type: "วิชาการ", column: "completed", progress: 100, owner: "สมชาย", deadline: "2025-06-30", startDate: "2025-04-01", members: [{ name: "สมชาย", role: "Evaluator" }] },
-];
+const PROJECT_TYPES: ProjectType[] = ["วิชาการ", "หลักสูตร", "สัมมนา", "IT", "งบประมาณ"];
 
 /* ==============================================================================
    Create / Edit Project Modal
@@ -65,18 +59,25 @@ function ProjectFormModal({ open, onClose, onSave, edit }: {
   const [members, setMembers] = useState<Member[]>(edit?.members ?? []);
   const [progress, setProgress] = useState(edit?.progress ?? 0);
   const [ddOpen, setDdOpen] = useState(false);
+  const [showCombobox, setShowCombobox] = useState(false);
 
-  const addMember = () => setMembers([...members, { name: "", role: "" }]);
+  const addMember = (user: { userId: string; name: string; department: string }) => {
+    if (members.some(m => m.userId === user.userId)) return;
+    setMembers([...members, { userId: user.userId, name: user.name, department: user.department, role: "" }]);
+    setShowCombobox(false);
+  };
   const removeMember = (i: number) => setMembers(members.filter((_, idx) => idx !== i));
-  const updateMember = (i: number, field: keyof Member, val: string) => {
+  const updateMemberRole = (i: number, role: string) => {
     const next = [...members];
-    next[i] = { ...next[i], [field]: val };
+    next[i] = { ...next[i], role };
     setMembers(next);
   };
 
+  const memberUserIds = members.map(m => m.userId).filter(Boolean);
+
   const handleSave = () => {
     if (!name.trim()) return;
-    onSave({ name: name.trim(), type, description: desc.trim(), startDate: start, deadline: end, members: members.filter(m => m.name.trim()), progress: edit ? progress : undefined });
+    onSave({ name: name.trim(), type, description: desc.trim(), startDate: start, deadline: end, members, progress: edit ? progress : undefined });
     setName(""); setType("วิชาการ"); setDesc(""); setStart(""); setEnd(""); setProgress(0); setMembers([]); setDdOpen(false);
     onClose();
   };
@@ -137,14 +138,22 @@ function ProjectFormModal({ open, onClose, onSave, edit }: {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-medium text-tu-text-secondary">สมาชิก</label>
-              <button onClick={addMember} className="flex items-center gap-1 text-xs font-medium text-tu-primary hover:text-tu-primary-hover transition-colors"><UserPlus size={12} />เพิ่มสมาชิก</button>
+              <button onClick={() => setShowCombobox(!showCombobox)} className="flex items-center gap-1 text-xs font-medium text-tu-primary hover:text-tu-primary-hover transition-colors"><UserPlus size={12} />เพิ่มสมาชิก</button>
             </div>
+            {showCombobox && (
+              <div className="mb-2">
+                <UserSearchCombobox onSelect={addMember} excludeUserIds={memberUserIds} />
+              </div>
+            )}
             {members.length === 0 && <p className="text-xs text-tu-text-muted py-2">ยังไม่มีสมาชิก — กด "เพิ่มสมาชิก" เพื่อเพิ่ม</p>}
             <div className="space-y-2">
               {members.map((m, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input type="text" value={m.name} onChange={e => updateMember(i, "name", e.target.value)} placeholder="ชื่อ" className="flex-1 rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" />
-                  <input type="text" value={m.role} onChange={e => updateMember(i, "role", e.target.value)} placeholder="บทบาท" className="w-28 rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" />
+                <div key={m.userId || i} className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-tu-text-primary truncate">{m.name}</p>
+                    {m.department && <p className="text-[10px] text-tu-text-muted">{m.department}</p>}
+                  </div>
+                  <input type="text" value={m.role} onChange={e => updateMemberRole(i, e.target.value)} placeholder="บทบาท" className="w-28 rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" />
                   <button onClick={() => removeMember(i)} className="p-1.5 rounded-md text-tu-text-muted hover:text-tu-error hover:bg-tu-error/10 transition-colors"><Trash2 size={14} /></button>
                 </div>
               ))}
@@ -224,12 +233,14 @@ function RejectModal({ open, onClose, onAction, project }: {
    Sortable Card
    ============================================================================== */
 
-function SortableCard({ project, onEdit, onApproveClick, onRejectClick, canApprove }: {
+function SortableCard({ project, onEdit, onApproveClick, onRejectClick, canApprove, canDelete, onDelete }: {
   project: ProjectCard;
   onEdit: (p: ProjectCard) => void;
   onApproveClick: (p: ProjectCard) => void;
   onRejectClick: (p: ProjectCard) => void;
   canApprove?: boolean;
+  canDelete?: boolean;
+  onDelete?: (p: ProjectCard) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id, data: { column: project.column } });
 
@@ -243,6 +254,9 @@ function SortableCard({ project, onEdit, onApproveClick, onRejectClick, canAppro
           <p className="text-xs text-tu-text-muted mt-0.5 line-clamp-1">{project.description}</p>
         </div>
         <button onPointerDown={e => { e.stopPropagation(); onEdit(project); }} className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-tu-text-muted hover:text-tu-primary hover:bg-tu-primary-soft transition-all shrink-0"><Pencil size={13} /></button>
+        {canDelete && onDelete && (
+          <button onPointerDown={e => { e.stopPropagation(); onDelete(project); }} className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-tu-text-muted hover:text-tu-error hover:bg-tu-error/10 transition-all shrink-0"><Trash2 size={13} /></button>
+        )}
       </div>
       <div className="flex items-center gap-2 mb-2">
         <Badge variant="outline" className="text-[10px]">{project.type}</Badge>
@@ -260,7 +274,7 @@ function SortableCard({ project, onEdit, onApproveClick, onRejectClick, canAppro
       )}
       <div className="flex items-center justify-between text-[10px] text-tu-text-muted mt-1">
         <span className="flex items-center gap-1"><Users size={10} />{project.owner}</span>
-        <span className="flex items-center gap-1"><Users size={10} />{project.members.length + 1} คน</span>
+        <span className="flex items-center gap-1"><Users size={10} />{project.members?.length ?? 0} คน</span>
       </div>
     </div>
   );
@@ -270,13 +284,15 @@ function SortableCard({ project, onEdit, onApproveClick, onRejectClick, canAppro
    Droppable Column
    ============================================================================== */
 
-function DroppableColumn({ col, projects, onEdit, onApproveClick, onRejectClick, canApprove }: {
+function DroppableColumn({ col, projects, onEdit, onApproveClick, onRejectClick, canApprove, canDelete, onDelete }: {
   col: { id: ColumnId; label: string; color: string };
   projects: ProjectCard[];
   onEdit: (p: ProjectCard) => void;
   onApproveClick: (p: ProjectCard) => void;
   onRejectClick: (p: ProjectCard) => void;
   canApprove?: boolean;
+  canDelete?: boolean;
+  onDelete?: (p: ProjectCard) => void;
 }) {
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: col.id });
   return (
@@ -288,7 +304,7 @@ function DroppableColumn({ col, projects, onEdit, onApproveClick, onRejectClick,
       <SortableContext items={projects.map(p => p.id)}>
         <div className="flex-1 px-3 pb-3 space-y-2 overflow-y-auto">
           {projects.map(proj => (
-            <SortableCard key={proj.id} project={proj} onEdit={onEdit} onApproveClick={onApproveClick} onRejectClick={onRejectClick} canApprove={canApprove} />
+            <SortableCard key={proj.id} project={proj} onEdit={onEdit} onApproveClick={onApproveClick} onRejectClick={onRejectClick} canApprove={canApprove} canDelete={canDelete} onDelete={onDelete} />
           ))}
           {projects.length === 0 && (
             <div className="flex items-center justify-center h-24 text-xs text-tu-text-muted pointer-events-none">ลากการ์ดมาวางที่นี่</div>
@@ -304,19 +320,24 @@ function DroppableColumn({ col, projects, onEdit, onApproveClick, onRejectClick,
    ============================================================================== */
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<ProjectCard[]>(INITIAL_PROJECTS);
+  const { data: apiProjects, isLoading, mutate } = useSWR("/api/projects", swrFetcher);
+  const projects: ProjectCard[] = Array.isArray(apiProjects) ? apiProjects : [];
   const [activeProject, setActiveProject] = useState<ProjectCard | null>(null);
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<ProjectType | null>(null);
+  const [search, setSearch] = useUrlState("search", "");
+  const [typeParam, setTypeParam] = useUrlState("type", "");
+  const typeFilter: ProjectType | null = (typeParam && ["วิชาการ", "หลักสูตร", "สัมมนา", "IT", "งบประมาณ"].includes(typeParam) ? typeParam : null) as ProjectType | null;
+  const setTypeFilter = (t: ProjectType | null) => setTypeParam(t ?? "");
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ProjectCard | null>(null);
   const [approveTarget, setApproveTarget] = useState<ProjectCard | null>(null);
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ProjectCard | null>(null);
 
   const canCreate = useHasPermission("PROJECTS_CREATE");
   const canApprove = useHasPermission("PROJECTS_APPROVE");
   const canEdit = useHasPermission("PROJECTS_EDIT");
+  const canDelete = useHasPermission("PROJECTS_DELETE");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -325,59 +346,58 @@ export default function ProjectsPage() {
 
   const handleDragStart = (e: DragStartEvent) => setActiveProject(projects.find(p => p.id === e.active.id) ?? null);
 
-  const handleDragEnd = (e: DragEndEvent) => {
+  const handleDragEnd = async (e: DragEndEvent) => {
     setActiveProject(null);
     const { active, over } = e;
     if (!over) return;
 
     const overCol = COLUMNS.find(c => c.id === String(over.id));
-    if (overCol) {
-      setProjects(prev => {
-        const dragged = prev.find(p => p.id === active.id);
-        if (!dragged) return prev;
-        const others = prev.filter(p => p.id !== active.id);
-        return [...others, { ...dragged, column: overCol.id, progress: overCol.id === "completed" ? 100 : dragged.progress }];
-      });
+    const targetCol = overCol?.id;
+    if (targetCol) {
+      try { await fetchApi(`/api/projects`, { method: "PUT", body: JSON.stringify({ id: active.id, status: targetCol }) }); } catch {}
+      await mutate();
       return;
     }
 
     const overProject = projects.find(p => p.id === over.id);
     if (overProject) {
-      setProjects(prev => {
-        const dragged = prev.find(p => p.id === active.id);
-        if (!dragged) return prev;
-        const others = prev.filter(p => p.id !== active.id);
-        return [...others, { ...dragged, column: overProject.column, progress: overProject.column === "completed" ? 100 : dragged.progress }];
-      });
+      try { await fetchApi(`/api/projects`, { method: "PUT", body: JSON.stringify({ id: active.id, status: overProject.column }) }); } catch {}
+      await mutate();
     }
   };
 
-  const handleApprove = (id: string, reason: string) => {
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, column: "completed", progress: 100, reason } : p));
+  const handleApprove = async (id: string, reason: string) => {
+    try { await fetchApi("/api/projects", { method: "PUT", body: JSON.stringify({ id, status: "completed", description: reason }) }); } catch {}
+    await mutate();
   };
 
-  const handleReject = (id: string, reason: string) => {
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, column: "planning", reason } : p));
+  const handleReject = async (id: string, reason: string) => {
+    try { await fetchApi("/api/projects", { method: "PUT", body: JSON.stringify({ id, status: "planning", description: reason }) }); } catch {}
+    await mutate();
   };
 
-  const handleCreate = (data: { name: string; type: ProjectType; description: string; startDate: string; deadline: string; members: Member[] }) => {
-    const np: ProjectCard = {
-      id: String(Date.now()), name: data.name, type: data.type, description: data.description,
-      column: "planning", progress: 0, owner: "ฉัน",
-      deadline: data.deadline || new Date().toISOString().slice(0, 10),
-      startDate: data.startDate, members: data.members,
-    };
-    setProjects(prev => [np, ...prev]);
+  const handleCreate = async (data: { name: string; type: ProjectType; description: string; startDate: string; deadline: string; members: Member[] }) => {
+    const memberIds = data.members.filter(m => m.userId).map(m => ({ userId: m.userId, role: m.role || "member" }));
+    try { await fetchApi("/api/projects", { method: "POST", body: JSON.stringify({ ...data, memberIds }) }); } catch {}
+    await mutate();
   };
 
-  const handleEdit = (data: { name: string; type: ProjectType; description: string; startDate: string; deadline: string; members: Member[]; progress?: number }) => {
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try { await fetchApi(`/api/projects?id=${deleteTarget.id}`, { method: "DELETE" }); } catch {}
+    setDeleteTarget(null);
+    await mutate();
+  };
+
+  const handleEdit = async (data: { name: string; type: ProjectType; description: string; startDate: string; deadline: string; members: Member[]; progress?: number }) => {
     if (!editTarget) return;
-    setProjects(prev => prev.map(p => p.id === editTarget.id ? {
-      ...p, name: data.name, type: data.type, description: data.description,
-      startDate: data.startDate, deadline: data.deadline, members: data.members,
-      progress: data.progress ?? p.progress,
-    } : p));
+    const memberIds = data.members.filter(m => m.userId).map(m => ({ userId: m.userId, role: m.role || "member" }));
+    try {
+      const { progress, members: _m, ...body } = data;
+      await fetchApi("/api/projects", { method: "PUT", body: JSON.stringify({ id: editTarget.id, ...body, memberIds }) });
+    } catch {}
     setEditTarget(null);
+    await mutate();
   };
 
   const filtered = projects.filter(p =>
@@ -410,7 +430,7 @@ export default function ProjectsPage() {
               <DroppableColumn key={col.id} col={col} projects={colProjects} onEdit={p => setEditTarget(p)}
                 onApproveClick={p => { setApproveTarget(p); setApproveOpen(true); }}
                 onRejectClick={p => { setApproveTarget(p); setRejectOpen(true); }}
-                canApprove={canApprove} />
+                canApprove={canApprove} canDelete={canDelete} onDelete={p => setDeleteTarget(p)} />
             );
           })}
         </div>
@@ -423,6 +443,15 @@ export default function ProjectsPage() {
       <ProjectFormModal key={editTarget?.id ?? "create"} open={!!editTarget} onClose={() => setEditTarget(null)} onSave={handleEdit} edit={editTarget ?? undefined} />
       <ApproveModal open={approveOpen} onClose={() => setApproveOpen(false)} onAction={handleApprove} project={approveTarget} />
       <RejectModal open={rejectOpen} onClose={() => setRejectOpen(false)} onAction={handleReject} project={approveTarget} />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="ยืนยันลบโครงการ"
+        message={`คุณต้องการลบ "${deleteTarget?.name ?? ""}" ใช่หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้`}
+        confirmLabel="ลบ"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

@@ -1,14 +1,17 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import useSWR from "swr";
 import {
-  Users, GraduationCap, FlaskConical, UserCheck,
+  Users, GraduationCap, UserCheck,
   Newspaper, BookOpen, ExternalLink, BarChart3, TrendingUp,
   PieChart, Activity, Building2, RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { swrFetcher } from "@/lib/fetcher";
+import { useHasMinRoleLevel } from "@/hooks/use-permission";
 
 /* ==============================================================================
    Types
@@ -54,7 +57,6 @@ const CHART_COLORS = ["var(--tu-primary)", "var(--tu-info)", "var(--tu-secondary
 const STAT_CARDS = [
   { key: "personnel", label: "จำนวนบุคลากร", icon: Users, color: "text-tu-primary", bg: "bg-tu-primary-soft", defaultValue: 247 },
   { key: "courses", label: "จำนวนหลักสูตร", icon: BookOpen, color: "text-tu-info", bg: "bg-tu-info/10", defaultValue: 38 },
-  { key: "research", label: "งานวิจัยทั้งหมด", icon: FlaskConical, color: "text-tu-success", bg: "bg-tu-success/10", defaultValue: 156 },
   { key: "students", label: "จำนวนนักศึกษา", icon: GraduationCap, color: "text-tu-warning", bg: "bg-tu-warning/10", defaultValue: 2847 },
 ] as const;
 
@@ -193,24 +195,27 @@ function DeptMiniChart({ view, analytics }: { view: ViewId; analytics: Dashboard
 function DashboardPageContent() {
   const router = useRouter(); const searchParams = useSearchParams();
   const rawView = searchParams.get("view") as ViewId | null;
-  const view: ViewId = rawView && ALLOWED_VIEWS.includes(rawView) ? rawView : "overview";
 
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
-  const [deptStats, setDeptStats] = useState<DeptStat[] | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Filter views based on role: Comparison view only for Dean+ (level >= 70)
+  const isDeanOrHigher = useHasMinRoleLevel(70);
+  const visibleViews = isDeanOrHigher ? views : views.filter(v => v.id !== "comparison");
+  const ALLOWED_VIEWS_FILTERED: ViewId[] = isDeanOrHigher ? ALLOWED_VIEWS : ALLOWED_VIEWS.filter(v => v !== "comparison");
+  const view: ViewId = rawView && ALLOWED_VIEWS_FILTERED.includes(rawView) ? rawView : "overview";
 
-  const loadStats = useCallback(async () => { setLoading(true); setError(null); try { const res = await fetch("/api/dashboard/stats", { headers: { "Content-Type": "application/json" } }); const json = await res.json(); if (!json.success) throw new Error(json.error?.message ?? "เกิดข้อผิดพลาด"); setData(json.data as DashboardData); } catch { setError("ไม่สามารถโหลดข้อมูลแดชบอร์ดได้"); } finally { setLoading(false); } }, []);
-  const loadDeptStats = useCallback(async () => { try { const res = await fetch("/api/dashboard/department-stats", { headers: { "Content-Type": "application/json" } }); const json = await res.json(); if (json.success) setDeptStats(json.data as DeptStat[]); } catch { /* non-blocking */ } }, []);
-
-  useEffect(() => { void loadStats(); void loadDeptStats(); intervalRef.current = setInterval(() => void loadStats(), 60000); return () => { if (intervalRef.current) clearInterval(intervalRef.current); }; }, [loadStats, loadDeptStats]);
+  // SWR: auto-cached, revalidates on focus every 5 min
+  const { data, error: statsError, isLoading } = useSWR("/api/dashboard/stats", swrFetcher<DashboardData>, {
+    refreshInterval: 300000, // revalidate every 5 min (not 60s)
+    revalidateOnFocus: true,
+  });
+  const { data: deptStats } = useSWR("/api/dashboard/department-stats", swrFetcher<DeptStat[]>);
+  const error = statsError ? "ไม่สามารถโหลดข้อมูลแดชบอร์ดได้" : null;
 
   const setView = useCallback((v: ViewId) => { const params = new URLSearchParams(searchParams.toString()); params.set("view", v); router.push(`/dashboard?${params.toString()}`, { scroll: false }); }, [router, searchParams]);
 
-  if (loading) return (<div className="p-6 space-y-6 animate-pulse"><div className="h-8 w-48 bg-tu-surface rounded" /><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({ length: 4 }).map((_, i) => (<div key={i} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-5 h-[104px]" />))}</div></div>);
-  if (error) return (<div className="p-6"><div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-10 text-center"><p className="text-tu-error font-semibold mb-2">ไม่สามารถโหลดข้อมูลได้</p><p className="text-sm text-tu-text-muted mb-4">{error}</p><button onClick={() => void loadStats()} className="rounded-[--radius-btn] bg-tu-primary text-white px-4 py-2 text-sm font-medium hover:bg-tu-primary-hover transition-colors">ลองใหม่</button></div></div>);
+  if (isLoading) return (<div className="p-6 space-y-6 animate-pulse"><div className="h-8 w-48 bg-tu-surface rounded" /><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{Array.from({ length: 3 }).map((_, i) => (<div key={i} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-5 h-[104px]" />))}</div></div>);
+  if (error) return (<div className="p-6"><div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-10 text-center"><p className="text-tu-error font-semibold mb-2">ไม่สามารถโหลดข้อมูลได้</p><p className="text-sm text-tu-text-muted mb-4">{error}</p><button onClick={() => window.location.reload()} className="rounded-[--radius-btn] bg-tu-primary text-white px-4 py-2 text-sm font-medium hover:bg-tu-primary-hover transition-colors">ลองใหม่</button></div></div>);
 
-  const statValues: Record<string, number> = { personnel: data?.orgStats.personnel ?? 247, courses: 38, research: (data?.orgStats.projectsInProgress ?? 0) + 150, students: 2847 };
+  const statValues: Record<string, number> = { personnel: data?.orgStats.personnel ?? 247, courses: 38, students: 2847 };
   const a = data?.analytics;
   const deptCards = deptStats ?? [{ key: "it", name: "ฝ่ายเทคโนโลยีสารสนเทศ (IT)", users: 12, documents: 45, projects: 3, todayBookings: 1 },{ key: "academic", name: "ฝ่ายวิชาการ", users: 18, documents: 67, projects: 5, todayBookings: 2 },{ key: "support", name: "ฝ่ายสนับสนุน", users: 8, documents: 23, projects: 2, todayBookings: 1 }];
 
@@ -220,14 +225,14 @@ function DashboardPageContent() {
         <div><h1 className="text-2xl font-semibold text-tu-text-primary">Dashboard</h1><p className="text-tu-text-muted text-sm mt-1">ภาพรวมคณะนิติศาสตร์ มหาวิทยาลัยธรรมศาสตร์</p></div>
         {data?.lastSync && (<span className="text-xs text-tu-text-muted flex items-center gap-1.5"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full bg-tu-success opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-tu-success" /></span><RefreshCw size={12} />อัปเดตล่าสุด {formatThaiTime(data.lastSync)}</span>)}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{STAT_CARDS.map((card) => (<StatCard key={card.key} label={card.label} value={statValues[card.key] ?? card.defaultValue} icon={card.icon} color={card.color} bg={card.bg} />))}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{STAT_CARDS.map((card) => (<StatCard key={card.key} label={card.label} value={statValues[card.key] ?? card.defaultValue} icon={card.icon} color={card.color} bg={card.bg} />))}</div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><PersonnelBreakdown stats={data!.orgStats} proportion={a?.userProportionByDept ?? []} /><AnnouncementsCard items={data?.latestAnnouncements ?? []} /></div>
 
       {/* Department Breakdown + 5 View Modes */}
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div><h2 className="text-base font-semibold text-tu-text-primary flex items-center gap-2"><Building2 size={18} className="text-tu-primary" />Dashboard แยกรายฝ่าย</h2><p className="text-xs text-tu-text-muted mt-0.5">ข้อมูล 3 ฝ่าย</p></div>
-          <div className="flex gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5">{views.map((v) => (<button key={v.id} onClick={() => setView(v.id)} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors", view === v.id ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary hover:text-tu-text-primary")}><v.icon size={14} />{v.label}</button>))}</div>
+          <div className="flex gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5">{visibleViews.map((v) => (<button key={v.id} onClick={() => setView(v.id)} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors", view === v.id ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary hover:text-tu-text-primary")}><v.icon size={14} />{v.label}</button>))}</div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {deptCards.map((d) => {

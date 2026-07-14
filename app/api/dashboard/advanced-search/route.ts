@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-utils";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { hasPermission, type RoleCode } from "@/lib/permissions";
 import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,10 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return apiError("UNAUTHORIZED", "กรุณาเข้าสู่ระบบ", 401);
+  }
+  const roles = (session.user as { roles?: string[] } | undefined)?.roles ?? [];
+  if (!hasPermission(roles, "DASHBOARD_MANAGE")) {
+    return apiError("FORBIDDEN", "ไม่มีสิทธิ์ใช้งาน Advanced Search", 403);
   }
 
   try {

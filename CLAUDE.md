@@ -745,6 +745,12 @@ Routes -\> Logout.
 
 ## 11. Authorization (RBAC)
 
+> **📋 Source of Truth:** The canonical RBAC specification is maintained in:
+> - `openspec/specs/rbac-role-definitions/spec.md` — Role hierarchy, data scope, summary matrix, differentiator rules
+> - `openspec/specs/rbac-module-permissions/spec.md` — Detailed per-module CRUD + action permissions for all 6 roles
+>
+> The sections below serve as a quick reference. For implementation details, always consult the spec files above.
+
 ### 11.1 RBAC Model
 
 #### Role (Authority)
@@ -802,9 +808,6 @@ See [11.6 Job Function](#116-job-function) for detailed application-level permis
 | Document Management | ✅ | ✅ | ✅ | ✅ | ✅ | 👁 |
 | Academic Management | ✅ | ✅ | ✅ | ✅ | ✅ | 👁 |
 | HR Management | ✅ | ✅ | 👁 | ✅ | ✅ | ❌ |
-| Research Management | ✅ | ✅ | ✅ | ✅ | ✅ | 👁 |
-| Legal Clinic | ✅ | ✅ | 👁 | ✅ | ✅ | ❌ |
-| Support Services | ✅ | ✅ | 👁 | ✅ | ✅ | 👁 |
 
 ### 11.4 Sidebar Visibility
 
@@ -881,35 +884,11 @@ architecture.
 - Training
 - Payroll
 
-##### Research Management
-
-**Submodules:**
-- Research Projects
-- Research Grants
-- Publications
-- Intellectual Property
-- Research Reports
-
-##### Legal Clinic
-
-**Submodules:**
-- Case Management
-- Client Registry
-- Appointment
-- Legal Consultation
-- Case Reports
-
 ##### Book Meeting
 
 **Submodules:**
 - Meeting Room Booking
 - Booking Calendar
-
-##### Support Services
-
-**Submodules:**
-- Helpdesk
-- Library
 
 #### Administrative Modules
 
@@ -1031,56 +1010,12 @@ permissions based on Role-Based Access Control (RBAC).
   | Training               | ✅ | ✅ | 👁 | ◐ | Self | 👁 |
   | Payroll                | ✅ | ✅ | ❌ | ❌ | Self | ❌ |
 
-#### Sub-Application: Research Management (ระบบงานวิจัย)
-
-  Permission Code       Super Admin   System Admin   Dean   Dept Admin   User   Viewer
-  --------------------- ------------- -------------- ------ ------------ ------ --------
-  `RESEARCH_VIEW`       ✅            ✅             ✅     ✅           ✅     👁
-  `RESEARCH_MANAGE`     ✅            ✅             ✅     ◐           ❌     ❌
-  `RESEARCH_APPROVE`    ✅            ✅             ✅     ❌           ❌     ❌
-
-  | Submodule             | Super Admin | System Admin | Dean | Dept Admin | User | Viewer |
-  | --------------------- | :---------: | :----------: | :--: | :--------: | :--: | :----: |
-  | Research Projects     | ✅ | ✅ | ✅ | ◐ | ◐ | 👁 |
-  | Research Grants       | ✅ | ✅ | ✅ | ◐ | ◐ | 👁 |
-  | Publications          | ✅ | ✅ | ✅ | ✅ | ◐ | 👁 |
-  | Intellectual Property | ✅ | ✅ | ✅ | ◐ | ◐ | 👁 |
-  | Research Reports      | ✅ | ✅ | ✅ | ✅ | 👁 | 👁 |
-
-#### Sub-Application: Legal Clinic (คลินิกกฎหมาย)
-
-  Permission Code          Super Admin   System Admin   Dean   Dept Admin   User   Viewer
-  ------------------------ ------------- -------------- ------ ------------ ------ --------
-  `LEGAL_CLINIC_VIEW`      ✅            ✅             👁     ✅           ✅     ❌
-  `LEGAL_CLINIC_MANAGE`    ✅            ✅             ❌     ◐           ❌     ❌
-  `LEGAL_CLINIC_APPROVE`   ✅            ✅             ❌     ✅           ❌     ❌
-
-  | Submodule          | Super Admin | System Admin | Dean | Dept Admin | User | Viewer |
-  | ------------------ | :---------: | :----------: | :--: | :--------: | :--: | :----: |
-  | Case Management    | ✅ | ✅ | 👁 | ✅ | ◐ | ❌ |
-  | Client Registry    | ✅ | ✅ | ❌ | ✅ | ◐ | ❌ |
-  | Appointment        | ✅ | ✅ | 👁 | ✅ | ◐ | ❌ |
-  | Legal Consultation | ✅ | ✅ | 👁 | ◐ | ◐ | ❌ |
-  | Case Reports       | ✅ | ✅ | 👁 | ✅ | 👁 | ❌ |
-
 #### Sub-Application: Book Meeting (จองห้องประชุม)
 
   | Submodule          | Super Admin | System Admin | Dean | Dept Admin | User | Viewer |
   | ------------------ | :---------: | :----------: | :--: | :--------: | :--: | :----: |
   | Meeting Room Booking | ✅ | ✅ | ✅ | ✅ | ✅ | 👁 |
   | Booking Calendar     | ✅ | ✅ | ✅ | ✅ | ✅ | 👁 |
-
-#### Sub-Application: Support Services (บริการสนับสนุน)
-
-  Permission Code     Super Admin   System Admin   Dean   Dept Admin   User   Viewer
-  ------------------- ------------- -------------- ------ ------------ ------ --------
-  `SUPPORT_VIEW`      ✅            ✅             👁     ✅           ✅     👁
-  `SUPPORT_MANAGE`    ✅            ✅             ❌     ✅           ❌     ❌
-
-  | Submodule | Super Admin | System Admin | Dean | Dept Admin | User | Viewer |
-  | --------- | :---------: | :----------: | :--: | :--------: | :--: | :----: |
-  | Helpdesk  | ✅ | ✅ | 👁 | ✅ | ✅ | 👁 |
-  | Library   | ✅ | ✅ | ✅ | ✅ | ✅ | 👁 |
 
 ### 11.7 Permission Matrix
 
@@ -1335,10 +1270,8 @@ See [17.3 UI Component Specification](#173-ui-component-specification) for UI co
     │   │   │   ├── document-management/  #   Document Management → Central/Dept/Personal Pool, Version, OCR
     │   │   │   ├── academic-management/  #   Academic → Curriculum, Courses, Schedule, Exams, Student Requests
     │   │   │   ├── hr-management/        #   HR → Personnel, Leave, Attendance, Evaluation, Training, Payroll
-    │   │   │   ├── research-management/  #   Research → Projects, Grants, Publications, IP, Reports
-    │   │   │   ├── legal-clinic/         #   Legal Clinic → Cases, Clients, Appointments, Consultation, Reports
     │   │   │   ├── book-meeting/         #   Book Meeting → Room Booking, Calendar
-    │   │   │   └── support-services/     #   Support → Helpdesk, Library
+    │   │   │
     │   │   │
     │   │   ├── intranet/                 # Module 3: อินทราเน็ตคณะ
     │   │   │
@@ -1496,3 +1429,11 @@ See [10.2 Authentication Flow](#102-authentication-flow) for the complete authen
 ## 19. Future Roadmap
 
 > **TODO:** Future roadmap and planned features will be defined here.
+
+## 20. Language Rules
+
+- สร้าง proposal.md เป็นภาษาไทย
+- สร้าง design.md เป็นภาษาไทย
+- สร้าง tasks.md เป็นภาษาไทย
+- อธิบาย Requirement เป็นภาษาไทย
+- ใช้ภาษาอังกฤษเฉพาะชื่อโค้ด, API, Database Schema, Class, Function และตัวแปร

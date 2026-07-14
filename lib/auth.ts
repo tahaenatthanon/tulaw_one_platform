@@ -66,6 +66,7 @@ function buildProviders(): NextAuthOptions["providers"] {
           email: user.email,
           name: `${user.firstNameTh} ${user.lastNameTh}`,
           roles: user.userRoles.map((ur) => ur.role.roleCode),
+          departmentId: user.departmentId,
         };
       },
     })
@@ -81,6 +82,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.roles = (user as { roles?: string[] }).roles ?? [];
+        token.departmentId = (user as { departmentId?: number }).departmentId ?? null;
       }
       // Google OAuth — assign viewer role for first-time Google users
       if (account?.provider === "google" && !token.roles) {
@@ -93,6 +95,8 @@ export const authOptions: NextAuthOptions = {
         (session.user as { id: string }).id = token.id as string;
         (session.user as { roles: string[] }).roles =
           (token.roles as string[]) ?? [];
+        (session.user as { departmentId: number | null }).departmentId =
+          (token.departmentId as number | null) ?? null;
       }
       return session;
     },

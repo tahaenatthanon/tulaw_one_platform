@@ -1,0 +1,45 @@
+import { getServerSession } from "next-auth";
+import type { NextRequest } from "next/server";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { apiSuccess, apiError } from "@/lib/api-utils";
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return apiError("UNAUTHORIZED", "กรุณาเข้าสู่ระบบ", 401);
+  }
+
+  try {
+    const now = new Date();
+    const [rooms, activeBookings] = await Promise.all([
+      prisma.meetingRoom.findMany({
+        where: { deletedAt: null },
+        orderBy: { name: "asc" },
+      }),
+      prisma.roomBooking.findMany({
+        where: {
+          status: "confirmed",
+          startTime: { lte: now },
+          endTime: { gt: now },
+        },
+        select: { roomId: true },
+      }),
+    ]);
+
+    const inUseRoomIds = new Set(activeBookings.map((b) => b.roomId));
+
+    const mapped = rooms.map((r) => ({
+      id: r.id,
+      name: r.name,
+      location: "", // MeetingRoom has no location field yet
+      capacity: r.capacity,
+      status: inUseRoomIds.has(r.id) ? "in-use" : "available",
+    }));
+
+    return apiSuccess(mapped);
+  } catch (e: unknown) {
+    console.error("[GET /api/book-meeting/rooms]", e);
+    return apiError("DB_ERROR", "ไม่สามารถดึงข้อมูลห้องประชุมได้");
+  }
+}

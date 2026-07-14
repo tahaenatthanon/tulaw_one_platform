@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-utils";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { type RoleCode, type PermissionCode } from "@/lib/permissions";
+import { resolveDataScope } from "@/lib/data-scope";
 import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +44,16 @@ export async function GET(_req: NextRequest) {
     return apiError("UNAUTHORIZED", "กรุณาเข้าสู่ระบบ", 401);
   }
 
+  const roles = (session.user as { roles?: string[] } | undefined)?.roles ?? [];
+  const userId = (session.user as { id?: string })?.id ?? "";
+  const departmentId = (session.user as { departmentId?: number | null })?.departmentId ?? null;
+  const scope = resolveDataScope(roles as RoleCode[], departmentId, userId);
+
+  // Build department filter for scoped queries
+  const deptFilter = !scope.canSeeAllDepartments && scope.departmentId !== null
+    ? { departmentId: scope.departmentId }
+    : {};
+
   try {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -50,144 +62,87 @@ export async function GET(_req: NextRequest) {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 7);
     const trendStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+    const monthBuckets = Array.from({ length: 7 }, (_, i) => new Date(now.getFullYear(), now.getMonth() - 6 + i, 1));
+    const trendLabels = monthBuckets.map((d) => THAI_SHORT_MONTHS[d.getMonth()]);
 
-    /* ── สถิติภาพรวม + ประกาศล่าสุด + หมวดหมู่ (parallel) ── */
+    /* ── ALL queries in ONE parallel block (fastest) ── */
     const [
-      totalUsers,
-      activeUsers,
-      totalDocuments,
-      projectsInProgress,
-      todayBookings,
-      latestAnnouncementRows,
-      categories,
-      departments,
+      totalUsers, activeUsers, totalDocuments, projectsInProgress, todayBookings,
+      latestAnnouncementRows, categories, departments,
+      userGroup, weeklyRows,
+      docTrend, bookingTrend, projectTrend,
+      docThis, docLast, bookThis, bookLast, projThis, projLast, annThis, annLast,
     ] = await Promise.allSettled([
-      prisma.user.count(),
-      prisma.user.count({ where: { status: "ACTIVE" } }),
-      prisma.document.count(),
-      prisma.project.count({ where: { status: "in_progress" } }),
-      prisma.roomBooking.count({
-        where: { startTime: { gte: startOfToday(), lt: new Date(startOfToday().getTime() + 24 * 3600 * 1000) } },
-      }),
-      prisma.announcement.findMany({
-        where: { status: "published", deletedAt: null },
-        orderBy: { publishDate: "desc" },
-        take: 5,
-        include: { category: true },
-      }),
+      // Stats
+      prisma.user.count({ where: deptFilter }),
+      prisma.user.count({ where: { status: "ACTIVE", ...deptFilter } }),
+      prisma.document.count({ where: deptFilter }),
+      prisma.project.count({ where: { status: "in_progress", ...deptFilter } }),
+      prisma.roomBooking.count({ where: { startTime: { gte: startOfToday(), lt: new Date(startOfToday().getTime() + 86400000) } } }),
+      // Announcements
+      prisma.announcement.findMany({ where: { status: "published", deletedAt: null }, orderBy: { publishDate: "desc" }, take: 5, include: { category: true } }),
       prisma.announcementCategory.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       prisma.department.findMany({ where: { status: "active" }, orderBy: { name: "asc" } }),
+      // Proportion
+      prisma.user.groupBy({ by: ["departmentId"], _count: { _all: true } }),
+      // Weekly
+      prisma.$queryRaw<{ dow: number; c: number }[]>`SELECT EXTRACT(DOW FROM start_time)::int AS dow, COUNT(*)::int AS c FROM room_bookings WHERE start_time >= ${weekStart} AND start_time < ${weekEnd} GROUP BY dow`,
+      // Trends (3 raw queries)
+      prisma.$queryRaw<{ month: string; c: number }[]>`SELECT to_char(created_at, 'YYYY-MM') AS month, COUNT(*)::int AS c FROM documents WHERE created_at >= ${trendStart} GROUP BY month`,
+      prisma.$queryRaw<{ month: string; c: number }[]>`SELECT to_char(start_time, 'YYYY-MM') AS month, COUNT(*)::int AS c FROM room_bookings WHERE start_time >= ${trendStart} GROUP BY month`,
+      prisma.$queryRaw<{ month: string; c: number }[]>`SELECT to_char(created_at, 'YYYY-MM') AS month, COUNT(*)::int AS c FROM projects WHERE created_at >= ${trendStart} GROUP BY month`,
+      // Comparison (8 count queries)
+      prisma.document.count({ where: { createdAt: { gte: monthStart } } }),
+      prisma.document.count({ where: { createdAt: { gte: lastMonthStart, lt: monthStart } } }),
+      prisma.roomBooking.count({ where: { startTime: { gte: monthStart } } }),
+      prisma.roomBooking.count({ where: { startTime: { gte: lastMonthStart, lt: monthStart } } }),
+      prisma.project.count({ where: { createdAt: { gte: monthStart } } }),
+      prisma.project.count({ where: { createdAt: { gte: lastMonthStart, lt: monthStart } } }),
+      prisma.announcement.count({ where: { publishDate: { gte: monthStart }, status: "published" } }),
+      prisma.announcement.count({ where: { publishDate: { gte: lastMonthStart, lt: monthStart }, status: "published" } }),
     ]);
 
+    const num = (r: PromiseSettledResult<number>) => (r.status === "fulfilled" ? r.value : 0);
+    const numArr = <T>(r: PromiseSettledResult<T[]>) => (r.status === "fulfilled" ? r.value : []);
+
     const orgStats = {
-      personnel: totalUsers.status === "fulfilled" ? totalUsers.value : 0,
-      activeUsers: activeUsers.status === "fulfilled" ? activeUsers.value : 0,
-      documents: totalDocuments.status === "fulfilled" ? totalDocuments.value : 0,
-      projectsInProgress: projectsInProgress.status === "fulfilled" ? projectsInProgress.value : 0,
-      todayBookings: todayBookings.status === "fulfilled" ? todayBookings.value : 0,
+      personnel: num(totalUsers),
+      activeUsers: num(activeUsers),
+      documents: num(totalDocuments),
+      projectsInProgress: num(projectsInProgress),
+      todayBookings: num(todayBookings),
     };
 
-    const latestAnnouncements =
-      latestAnnouncementRows.status === "fulfilled" && latestAnnouncementRows.value.length > 0
-        ? latestAnnouncementRows.value.map((a) => ({
-            id: a.id,
-            title: a.title,
-            category: a.category?.name ?? "ทั่วไป",
-            publishDate: a.publishDate ? a.publishDate.toISOString() : a.createdAt.toISOString(),
-            status: a.status,
-          }))
-        : [
-            { id: "mock-1", title: "ประกาศผลสอบคัดเลือกทุนเรียนดี ประจำปีการศึกษา 2568", category: "ประกาศผล", publishDate: "2026-07-10T09:00:00Z", status: "published" },
-            { id: "mock-2", title: "ด่วน.. กำหนดการส่งผลงานวิชาการและกำหนดการประเมินผล", category: "ด่วน", publishDate: "2026-07-09T14:30:00Z", status: "published" },
-            { id: "mock-3", title: "เชิญเข้าร่วมอบรม PDPA สำหรับบุคลากรมหาวิทยาลัย", category: "เชิญชวน", publishDate: "2026-07-08T10:00:00Z", status: "published" },
-            { id: "mock-4", title: "ผลการพิจารณาทุนอุดหนุนการวิจัยจากกองทุนวิจัยคณะ", category: "ประกาศผล", publishDate: "2026-07-07T16:45:00Z", status: "published" },
-            { id: "mock-5", title: "นโยบายการจัดการเรียนการสอน ประจำภาคต้น ปีการศึกษา 2569", category: "นโยบาย", publishDate: "2026-07-05T08:30:00Z", status: "published" },
-            { id: "mock-6", title: "เชิญร่วมงานสัมมนาทางวิชาการเนื่องในวันรพี", category: "เชิญชวน", publishDate: "2026-07-03T13:00:00Z", status: "published" },
-          ];
+    const latestAnnouncements = numArr(latestAnnouncementRows).length > 0
+      ? numArr(latestAnnouncementRows).map((a: { id: string; title: string; category?: { name: string }; publishDate?: Date; createdAt: Date; status: string }) => ({
+          id: a.id, title: a.title,
+          category: a.category?.name ?? "ทั่วไป",
+          publishDate: a.publishDate ? a.publishDate.toISOString() : a.createdAt.toISOString(),
+          status: a.status,
+        }))
+      : [] as { id: string; title: string; category: string; publishDate: string; status: string }[];
 
-    const announcementCategories =
-      categories.status === "fulfilled" ? categories.value.map((c) => c.name) : [];
+    const announcementCategories = numArr(categories).map((c: { name: string }) => c.name);
+    const deptNameById = new Map(numArr(departments).map((d: { id: number; name: string }) => [d.id, d.name]));
 
-    const deptNameById = new Map<number, string>(
-      departments.status === "fulfilled" ? departments.value.map((d) => [d.id, d.name]) : []
-    );
-
-    /* ── สัดส่วนผู้ใช้แยกฝ่าย ── */
-    const userGroup = await prisma.user
-      .groupBy({ by: ["departmentId"], _count: { _all: true } })
-      .catch(() => []);
-    const userProportionByDept = userGroup.map((g) => ({
+    const userProportionByDept = numArr(userGroup).map((g: { departmentId: number; _count: { _all: number } }) => ({
       name: deptNameById.get(g.departmentId) ?? "ไม่ระบุฝ่าย",
       value: g._count._all,
     }));
 
-    /* ── การจองรายวันในสัปดาห์นี้ ── */
-    const weeklyRows = await prisma
-      .$queryRaw<{ dow: number; c: number }[]>`
-        SELECT EXTRACT(DOW FROM start_time)::int AS dow, COUNT(*)::int AS c
-        FROM room_bookings
-        WHERE start_time >= ${weekStart} AND start_time < ${weekEnd}
-        GROUP BY dow
-      `
-      .catch(() => [] as { dow: number; c: number }[]);
-    const weeklyMap = new Map(weeklyRows.map((r) => [r.dow, Number(r.c)]));
+    const weeklyMap = new Map(numArr(weeklyRows).map((r: { dow: number; c: number }) => [r.dow, Number(r.c)]));
     const weeklyByDay = THAI_WEEKDAYS.map((day, idx) => {
-      const dbDow = idx === 6 ? 0 : idx + 1; // idx 0=จันทร์ -> dbDow 1
+      const dbDow = idx === 6 ? 0 : idx + 1;
       return { day, value: weeklyMap.get(dbDow) ?? 0 };
     });
 
-    /* ── แนวโน้มรายเดือน 7 เดือน (เอกสาร/การจอง/โครงการ) ── */
-    const monthBuckets: Date[] = [];
-    for (let i = 6; i >= 0; i--) {
-      monthBuckets.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
-    }
-    const trendLabels = monthBuckets.map((d) => THAI_SHORT_MONTHS[d.getMonth()]);
-
-    const [docTrend, bookingTrend, projectTrend] = await Promise.allSettled([
-      prisma.$queryRaw<{ month: string; c: number }[]>`
-        SELECT to_char(created_at, 'YYYY-MM') AS month, COUNT(*)::int AS c
-        FROM documents WHERE created_at >= ${trendStart} GROUP BY month
-      `,
-      prisma.$queryRaw<{ month: string; c: number }[]>`
-        SELECT to_char(start_time, 'YYYY-MM') AS month, COUNT(*)::int AS c
-        FROM room_bookings WHERE start_time >= ${trendStart} GROUP BY month
-      `,
-      prisma.$queryRaw<{ month: string; c: number }[]>`
-        SELECT to_char(created_at, 'YYYY-MM') AS month, COUNT(*)::int AS c
-        FROM projects WHERE created_at >= ${trendStart} GROUP BY month
-      `,
-    ]);
-
-    const toSeries = (res: PromiseSettledResult<{ month: string; c: number }[]>) =>
+    const toTrend = (res: PromiseSettledResult<{ month: string; c: number }[]>) =>
       monthBuckets.map((d) => {
         if (res.status !== "fulfilled") return 0;
         const row = res.value.find((r) => r.month === ym(d));
         return row ? Number(row.c) : 0;
       });
 
-    const monthlyTrend = {
-      labels: trendLabels,
-      documents: toSeries(docTrend),
-      bookings: toSeries(bookingTrend),
-      projects: toSeries(projectTrend),
-    };
-
-    /* ── เปรียบเทียบเดือนนี้ vs เดือนก่อน ── */
-    const [docThis, docLast, bookThis, bookLast, projThis, projLast, annThis, annLast] =
-      await Promise.allSettled([
-        prisma.document.count({ where: { createdAt: { gte: monthStart } } }),
-        prisma.document.count({ where: { createdAt: { gte: lastMonthStart, lt: monthStart } } }),
-        prisma.roomBooking.count({ where: { startTime: { gte: monthStart } } }),
-        prisma.roomBooking.count({ where: { startTime: { gte: lastMonthStart, lt: monthStart } } }),
-        prisma.project.count({ where: { createdAt: { gte: monthStart } } }),
-        prisma.project.count({ where: { createdAt: { gte: lastMonthStart, lt: monthStart } } }),
-        prisma.announcement.count({ where: { publishDate: { gte: monthStart }, status: "published" } }),
-        prisma.announcement.count({
-          where: { publishDate: { gte: lastMonthStart, lt: monthStart }, status: "published" },
-        }),
-      ]);
-
-    const num = (r: PromiseSettledResult<number>) => (r.status === "fulfilled" ? r.value : 0);
     const comparison = [
       { label: "เอกสาร", thisMonth: num(docThis), lastMonth: num(docLast) },
       { label: "การจอง", thisMonth: num(bookThis), lastMonth: num(bookLast) },
@@ -204,7 +159,7 @@ export async function GET(_req: NextRequest) {
       analytics: {
         weeklyByDay,
         userProportionByDept,
-        monthlyTrend,
+        monthlyTrend: { labels: trendLabels, documents: toTrend(docTrend), bookings: toTrend(bookingTrend), projects: toTrend(projectTrend) },
         comparison,
       },
     });

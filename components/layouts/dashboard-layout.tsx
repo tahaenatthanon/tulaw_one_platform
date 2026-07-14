@@ -42,12 +42,12 @@ const platformNav: NavItem[] = [
   { href: "/intranet", label: "Intranet", icon: Newspaper },
   { href: "/book-meeting", label: "Book Meeting", icon: CalendarCheck, permission: "BOOK_MEETING_VIEW" },
   { href: "/documents", label: "Document", icon: FolderOpen, permission: "DOCUMENTS_VIEW" },
-  { href: "/projects", label: "Projects", icon: FlaskConical, permission: "RESEARCH_VIEW" },
+  { href: "/projects", label: "Projects", icon: FlaskConical, permission: "PROJECTS_VIEW" },
 ];
 
 const adminNav: NavItem[] = [
   { href: "/users", label: "Users & Roles", icon: Users, roles: ["super_admin", "system_admin"] },
-  { href: "/audit-log", label: "Audit Log", icon: ShieldCheck, roles: ["super_admin", "system_admin"] },
+  { href: "/audit-log", label: "Audit Log", icon: ShieldCheck, roles: ["super_admin", "system_admin", "dean", "dept_admin"] },
   { href: "/settings", label: "System Config", icon: Settings, roles: ["super_admin", "system_admin"] },
 ];
 
@@ -57,9 +57,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const roles = (session?.user as { roles?: string[] })?.roles ?? [];
-  const hasResearchView = useHasPermission("RESEARCH_VIEW");
   const hasBookMeetingView = useHasPermission("BOOK_MEETING_VIEW");
   const hasDocumentsView = useHasPermission("DOCUMENTS_VIEW");
+  const hasProjectsView = useHasPermission("PROJECTS_VIEW");
+  const hasMinRoleLevel = (minLevel: number) => {
+    return Math.max(0, ...roles.map((r) => {
+      const ROLE_LEVELS: Record<string, number> = { super_admin: 100, system_admin: 80, dean: 70, dept_admin: 50, user: 30, viewer: 10 };
+      return ROLE_LEVELS[r] ?? 0;
+    })) >= minLevel;
+  };
+  const showAdvancedSearch = hasMinRoleLevel(70); // Dean and above
 
   // Load collapsed preference from localStorage
   useEffect(() => {
@@ -80,9 +87,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   function hasPermissionAccess(item: NavItem): boolean {
     if (!item.permission) return true;
-    if (item.permission === "RESEARCH_VIEW") return hasResearchView;
     if (item.permission === "BOOK_MEETING_VIEW") return hasBookMeetingView;
     if (item.permission === "DOCUMENTS_VIEW") return hasDocumentsView;
+    if (item.permission === "PROJECTS_VIEW") return hasProjectsView;
     return true;
   }
 
@@ -219,10 +226,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             />
           </div>
 
-          {/* Advanced Search Button (standalone component with results panel) */}
-          <div className="hidden sm:block">
-            <AdvancedSearchPanel categories={["ประกาศ", "ผู้ใช้", "เอกสาร", "โครงการ", "ทั้งหมด"]} />
-          </div>
+          {/* Advanced Search Button (Dean and above only) */}
+          {showAdvancedSearch && (
+            <div className="hidden sm:block">
+              <AdvancedSearchPanel categories={["ประกาศ", "ผู้ใช้", "เอกสาร", "โครงการ", "ทั้งหมด"]} />
+            </div>
+          )}
 
           {/* Right side */}
           <div className="flex items-center gap-2 ml-auto">

@@ -6,6 +6,7 @@ import {
   Plus, X, Trash2, Save, CheckCircle, Copy, Database, Plug, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUrlState } from "@/hooks/use-url-state";
 
 /* ==============================================================================
    Types
@@ -230,7 +231,7 @@ function CategoriesTab({ annCats, projCats, onAnnsChange, onProjsChange }: {
    ============================================================================== */
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("auth");
+  const [activeTab, setActiveTab] = useUrlState<TabId>("tab", "auth");
 
   const [authForm, setAuthForm] = useState<AuthSettings>(DEFAULT_AUTH);
   const [ssoForm, setSsoForm] = useState<SsoSettings>(DEFAULT_SSO);
@@ -257,9 +258,6 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-semibold text-tu-text-primary">System Config</h1>
           <p className="text-tu-text-muted text-sm mt-1">ตั้งค่าระบบ — กดบันทึกเพื่อให้การเปลี่ยนแปลงมีผล</p>
         </div>
-        <button onClick={handleSave} disabled={!dirty} className={cn("flex items-center gap-1.5 rounded-[--radius-btn] px-4 py-2 text-sm font-medium transition-colors", dirty ? "bg-tu-primary text-white hover:bg-tu-primary-hover" : "bg-tu-success text-white")}>
-          {dirty ? <Save size={16} /> : <CheckCircle size={16} />}บันทึก
-        </button>
       </div>
 
       <SaveBanner dirty={dirty} onSave={handleSave} />

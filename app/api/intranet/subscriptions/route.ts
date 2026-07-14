@@ -1,16 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function GET() {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
       return NextResponse.json({ success: false, message: "ไม่พบผู้ใช้" }, { status: 401 });
     }
+    const userId = (session.user as { id: string }).id;
 
     const subs = await prisma.announcementSubscription.findMany({
-      where: { userId: session.user.id as string, deletedAt: null },
+      where: { userId, deletedAt: null },
       include: {
         category: { select: { id: true, name: true } },
         department: { select: { id: true, name: true } },
@@ -25,13 +27,13 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
       return NextResponse.json({ success: false, message: "ไม่พบผู้ใช้" }, { status: 401 });
     }
 
     const { categoryName, departmentId, isSubscribed } = await req.json();
-    const userId = session.user.id as string;
+    const userId = (session.user as { id: string }).id;
 
     // If categoryName is provided, look up the category by name
     let catId: number | null = null;
@@ -77,8 +79,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
       return NextResponse.json({ success: false, message: "ไม่พบผู้ใช้" }, { status: 401 });
     }
 

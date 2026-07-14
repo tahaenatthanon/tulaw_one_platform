@@ -1,13 +1,17 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import useSWR from "swr";
+import { useSession } from "next-auth/react";
 import {
   CalendarCheck, Building2, Users, Clock, Search,
   Video, MapPin, AlertTriangle, Check, X, Plus,
   ChevronRight, ListFilter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { swrFetcher, fetchApi } from "@/lib/fetcher";
 import { useHasPermission } from "@/hooks/use-permission";
+import { useUrlState } from "@/hooks/use-url-state";
 
 /* ==============================================================================
    Types
@@ -37,24 +41,6 @@ const TABS: { id: TabId; label: string; icon: typeof Building2 }[] = [
   { id: "my-bookings", label: "การจองของฉัน", icon: CalendarCheck },
   { id: "pending", label: "รออนุมัติ", icon: ListFilter },
   { id: "history", label: "ประวัติ", icon: ListFilter },
-];
-
-const MOCK_ROOMS: Room[] = [
-  { id: "room-201", name: "ห้องประชุม 201", location: "อาคารคณะนิติศาสตร์ ชั้น 2", capacity: 20, status: "available" },
-  { id: "room-301", name: "ห้องประชุม 301", location: "อาคารคณะนิติศาสตร์ ชั้น 3", capacity: 60, status: "in-use" },
-  { id: "room-302", name: "ห้องประชุม 302", location: "อาคารคณะนิติศาสตร์ ชั้น 3", capacity: 15, status: "available" },
-  { id: "room-501", name: "ห้องประชุมใหญ่ ชั้น 5", location: "อาคารคณะนิติศาสตร์ ชั้น 5", capacity: 120, status: "booked" },
-  { id: "room-101", name: "ห้องประชุมย่อย 101", location: "อาคารคณะนิติศาสตร์ ชั้น 1", capacity: 8, status: "available" },
-  { id: "room-401", name: "ห้องสัมมนา 401", location: "อาคารคณะนิติศาสตร์ ชั้น 4", capacity: 30, status: "available" },
-];
-
-const MOCK_BOOKINGS: Booking[] = [
-  { id: "b1", roomId: "room-301", title: "ประชุมคณะกรรมการบริหาร", purpose: "หารืองบประมาณประจำปี 2568", date: "2025-07-13", startTime: "09:00", endTime: "12:00", attendeeCount: 25, msTeamsLink: "", status: "confirmed", userId: "me" },
-  { id: "b2", roomId: "room-201", title: "อบรม PDPA บุคลากร", purpose: "อบรม PDPA", date: "2025-07-13", startTime: "13:00", endTime: "16:00", attendeeCount: 15, msTeamsLink: "", status: "confirmed", userId: "me" },
-  { id: "b3", roomId: "room-501", title: "สัมมนากฎหมายระหว่างประเทศ", purpose: "สัมมนา", date: "2025-07-13", startTime: "09:00", endTime: "16:30", attendeeCount: 100, msTeamsLink: "https://teams.microsoft.com/...", status: "confirmed", userId: "other" },
-  { id: "b4", roomId: "room-302", title: "ประชุมฝ่ายวิชาการ", purpose: "สรุปผลการเรียน", date: "2025-07-13", startTime: "10:00", endTime: "11:00", attendeeCount: 8, msTeamsLink: "", status: "pending", userId: "me" },
-  { id: "b5", roomId: "room-101", title: "สอบสัมภาษณ์อาจารย์", purpose: "สอบสัมภาษณ์", date: "2025-07-13", startTime: "14:00", endTime: "16:00", attendeeCount: 5, msTeamsLink: "", status: "pending", userId: "other" },
-  { id: "b6", roomId: "room-401", title: "ปฐมนิเทศนักศึกษาใหม่", purpose: "ปฐมนิเทศ", date: "2025-07-13", startTime: "08:30", endTime: "16:00", attendeeCount: 28, msTeamsLink: "", status: "completed", userId: "me" },
 ];
 
 const TIME_SLOTS = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00"];
@@ -98,7 +84,8 @@ function BookingModal({ open, onClose, rooms, bookings, onCreate }: {
     if (!rid || !date) return;
     const hasConflict = bookings.some(b =>
       b.roomId === rid && b.date === date && b.status !== "cancelled" &&
-      b.startTime < et && b.endTime > st
+      (new Date(b.startTime).toTimeString().slice(0, 5)) < et &&
+      (new Date(b.endTime).toTimeString().slice(0, 5)) > st
     );
     setConflict(hasConflict ? "ช่วงเวลานี้มีผู้จองแล้ว กรุณาเลือกเวลาใหม่" : null);
   };
@@ -120,7 +107,7 @@ function BookingModal({ open, onClose, rooms, bookings, onCreate }: {
     if (!title || !roomId || !startTime || !endTime) return;
     if (conflict) return;
     const link = msTeams ? "https://teams.microsoft.com/l/meetup-join/..." : "";
-    onCreate({ roomId, title, purpose, date: bookingDate, startTime, endTime, attendeeCount: Number(attendees) || 0, msTeamsLink: link, status: "confirmed", notes });
+    onCreate({ roomId, title, purpose, date: bookingDate, startTime, endTime, attendeeCount: Number(attendees) || 0, msTeamsLink: link, status: "pending", notes });
     setTitle(""); setPurpose(""); setRoomId(""); setStartTime("09:00"); setEndTime("12:00");
     setBookingDate(new Date().toISOString().slice(0, 10));
     setAttendees("10"); setNotes(""); setMsTeams(false); setConflict(null);
@@ -215,7 +202,8 @@ function BookingModal({ open, onClose, rooms, bookings, onCreate }: {
    ============================================================================== */
 
 function RoomsTab({ rooms, search }: { rooms: Room[]; search: string }) {
-  const filtered = rooms.filter(r => r.name.toLowerCase().includes(search.toLowerCase()) || r.location.toLowerCase().includes(search.toLowerCase()));
+  const safe = rooms ?? [];
+  const filtered = safe.filter((r: Room) => r?.name?.toLowerCase().includes((search ?? "").toLowerCase()) || r?.location?.toLowerCase().includes((search ?? "").toLowerCase()));
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {filtered.map(room => {
@@ -251,16 +239,34 @@ function ScheduleTab({ rooms, bookings, search }: { rooms: Room[]; bookings: Boo
   const prevDay = () => setScheduleDate(d => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
   const nextDay = () => setScheduleDate(d => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; });
 
-  const filteredRooms = rooms.filter(r =>
-    r.name.toLowerCase().includes(search.toLowerCase()) ||
-    r.location.toLowerCase().includes(search.toLowerCase())
+  // Selected date as YYYY-MM-DD for filtering
+  const selectedDateStr = scheduleDate.toISOString().slice(0, 10);
+
+  // Extract "HH:MM" from ISO string like "2025-07-14T09:00:00.000Z"
+  const extractTime = (iso: string) => {
+    try { return new Date(iso).toTimeString().slice(0, 5); } catch { return iso.slice(11, 16); }
+  };
+
+  const safeRooms = rooms ?? [];
+  const safeBookings = bookings ?? [];
+  const filteredRooms = safeRooms.filter((r: Room) =>
+    r?.name?.toLowerCase().includes((search ?? "").toLowerCase()) ||
+    r?.location?.toLowerCase().includes((search ?? "").toLowerCase())
   );
 
   const getBooking = (roomId: string, slot: string) =>
-    bookings.find(b => b.roomId === roomId && b.status !== "cancelled" && b.startTime <= slot && b.endTime > slot);
+    safeBookings.find((b: Booking) =>
+      b.roomId === roomId && b.status !== "cancelled" &&
+      b.date === selectedDateStr &&
+      extractTime(b.startTime) <= slot && extractTime(b.endTime) > slot
+    );
 
   const getIsStart = (roomId: string, slot: string) =>
-    !!bookings.find(b => b.roomId === roomId && b.status !== "cancelled" && b.startTime === slot);
+    !!safeBookings.find((b: Booking) =>
+      b.roomId === roomId && b.status !== "cancelled" &&
+      b.date === selectedDateStr &&
+      extractTime(b.startTime) === slot
+    );
 
   // Show 8:00-18:00 (hourly)
   const hourlySlots = TIME_SLOTS.filter((_, i) => i % 2 === 0);
@@ -320,22 +326,24 @@ function ScheduleTab({ rooms, bookings, search }: { rooms: Room[]; bookings: Boo
    Bookings Tab (My Bookings / Pending / History)
    ============================================================================== */
 
-function BookingsList({ bookings, rooms, type, onConfirm, onCancel }: {
+function BookingsList({ bookings, rooms, type, currentUserId, canApprove, onConfirm, onCancel }: {
   bookings: Booking[]; rooms: Room[]; type: "my-bookings" | "pending" | "history";
-  onConfirm: (id: string) => void; onCancel: (id: string) => void;
+  currentUserId: string; canApprove: boolean; onConfirm: (id: string) => void; onCancel: (id: string) => void;
 }) {
+  const safe = bookings ?? [];
+  const safeRooms = rooms ?? [];
   const filtered = type === "my-bookings"
-    ? bookings.filter(b => b.userId === "me" && b.status !== "completed")
+    ? safe.filter((b: Booking) => b.userId === currentUserId && b.status !== "completed" && b.status !== "cancelled")
     : type === "pending"
-    ? bookings.filter(b => b.status === "pending")
-    : bookings.filter(b => b.status === "completed" || b.status === "cancelled");
+    ? safe.filter((b: Booking) => b.status === "pending")
+    : safe.filter((b: Booking) => b.status === "completed" || b.status === "cancelled");
 
   if (filtered.length === 0) return <div className="text-center py-12 text-tu-text-muted"><CalendarCheck size={40} className="mx-auto mb-3 opacity-20" /><p>ไม่พบรายการ</p></div>;
 
   return (
     <div className="space-y-3">
       {filtered.map(booking => {
-        const room = rooms.find(r => r.id === booking.roomId);
+        const room = safeRooms.find((r: Room) => r.id === booking.roomId);
         const st = BOOKING_STATUS[booking.status];
         return (
           <div key={booking.id} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 hover:shadow-md transition-shadow">
@@ -344,14 +352,16 @@ function BookingsList({ bookings, rooms, type, onConfirm, onCancel }: {
                 <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", st.bg)}><CalendarCheck size={20} className={st.color} /></div>
                 <div className="min-w-0">
                   <h4 className="text-sm font-semibold text-tu-text-primary">{booking.title}</h4>
-                  <p className="text-xs text-tu-text-muted mt-0.5">{room?.name ?? "—"} · {new Date(booking.date).toLocaleDateString("th-TH", { dateStyle: "medium" })} · {booking.startTime} - {booking.endTime} · {booking.attendeeCount} คน</p>
+                  <p className="text-xs text-tu-text-muted mt-0.5">{room?.name ?? "—"} · {new Date(booking.date).toLocaleDateString("th-TH", { dateStyle: "medium" })} · {booking.startTime ? new Date(booking.startTime).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "—"} - {booking.endTime ? new Date(booking.endTime).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "—"} · {booking.attendeeCount} คน</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {type === "history" && <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium", st.bg, st.color)}>{st.label}</span>}
                 {(type === "my-bookings" || type === "pending") && booking.status !== "cancelled" && booking.status !== "completed" && (
                   <div className="flex gap-1.5">
-                    <button onClick={() => onConfirm(booking.id)} className="rounded-[--radius-btn] bg-tu-success px-3 py-1 text-[11px] font-medium text-white hover:brightness-110 transition-all">ยืนยัน</button>
+                    {booking.status === "pending" && (type === "pending" || (type === "my-bookings" && canApprove)) && (
+                      <button onClick={() => onConfirm(booking.id)} className="rounded-[--radius-btn] bg-tu-success px-3 py-1 text-[11px] font-medium text-white hover:brightness-110 transition-all">ยืนยัน</button>
+                    )}
                     <button onClick={() => onCancel(booking.id)} className="rounded-[--radius-btn] border border-tu-error px-3 py-1 text-[11px] font-medium text-tu-error hover:bg-tu-error/10 transition-all">ยกเลิก</button>
                   </div>
                 )}
@@ -370,32 +380,49 @@ function BookingsList({ bookings, rooms, type, onConfirm, onCancel }: {
    ============================================================================== */
 
 export default function BookMeetingPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("rooms");
-  const [search, setSearch] = useState("");
-  const [rooms, setRooms] = useState(MOCK_ROOMS);
-  const [bookings, setBookings] = useState(MOCK_BOOKINGS);
+  const [activeTab, setActiveTab] = useUrlState<TabId>("tab", "rooms");
+  const [search, setSearch] = useUrlState("search", "");
   const [modalOpen, setModalOpen] = useState(false);
+
+  const { data: session } = useSession();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? "";
+
+  const { data: apiBookings, mutate: mutateBookings } = useSWR("/api/book-meeting", swrFetcher);
+  const bookings: Booking[] = Array.isArray(apiBookings) ? apiBookings : [];
+
+  const { data: apiRooms } = useSWR("/api/book-meeting/rooms", swrFetcher);
+  const rooms: Room[] = Array.isArray(apiRooms) ? apiRooms : [];
+
   const canCreate = useHasPermission("BOOK_MEETING_CREATE");
   const canApprove = useHasPermission("BOOK_MEETING_APPROVE");
 
-  const now = new Date().toTimeString().slice(0, 5);
   const availableCount = rooms.filter(r => r.status === "available").length;
   const todayBookings = bookings.filter(b => b.status === "confirmed" || b.status === "pending").length;
-  const myBookings = bookings.filter(b => b.userId === "me" && b.status === "confirmed").length;
+  const myBookings = bookings.filter(b => b.userId === currentUserId && b.status === "confirmed").length;
 
-  const handleCreate = (b: Omit<Booking, "id" | "userId">) => {
-    const newBooking: Booking = { ...b, id: String(Date.now()), userId: "me" };
-    setBookings(prev => [newBooking, ...prev]);
-    // Update room status
-    setRooms(prev => prev.map(r => r.id === b.roomId ? { ...r, status: "booked" as const } : r));
+  const handleCreate = async (b: Omit<Booking, "id" | "userId">) => {
+    try {
+      await fetchApi("/api/book-meeting", {
+        method: "POST",
+        body: JSON.stringify({
+          roomId: b.roomId, title: b.title,
+          startTime: `${b.date}T${b.startTime}:00`, endTime: `${b.date}T${b.endTime}:00`,
+          attendeeCount: b.attendeeCount, msTeamsLink: b.msTeamsLink,
+          purpose: b.purpose, notes: b.notes, status: b.status,
+        }),
+      });
+    } catch {}
+    await mutateBookings();
   };
 
-  const handleConfirm = (id: string) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status: "confirmed" as const } : b));
+  const handleConfirm = async (id: string) => {
+    try { await fetchApi("/api/book-meeting", { method: "PUT", body: JSON.stringify({ id, status: "confirmed" }) }); } catch {}
+    await mutateBookings();
   };
 
-  const handleCancel = (id: string) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status: "cancelled" as const } : b));
+  const handleCancel = async (id: string) => {
+    try { await fetchApi(`/api/book-meeting?id=${id}`, { method: "DELETE" }); } catch {}
+    await mutateBookings();
   };
 
   return (
@@ -444,9 +471,9 @@ export default function BookMeetingPage() {
       {/* Content */}
       {activeTab === "rooms" && <RoomsTab rooms={rooms} search={search} />}
       {activeTab === "schedule" && <ScheduleTab rooms={rooms} bookings={bookings} search={search} />}
-      {activeTab === "my-bookings" && <BookingsList bookings={bookings} rooms={rooms} type="my-bookings" onConfirm={handleConfirm} onCancel={handleCancel} />}
-      {activeTab === "pending" && canApprove && <BookingsList bookings={bookings} rooms={rooms} type="pending" onConfirm={handleConfirm} onCancel={handleCancel} />}
-      {activeTab === "history" && <BookingsList bookings={bookings} rooms={rooms} type="history" onConfirm={handleConfirm} onCancel={handleCancel} />}
+      {activeTab === "my-bookings" && <BookingsList bookings={bookings} rooms={rooms} type="my-bookings" currentUserId={currentUserId} canApprove={canApprove} onConfirm={handleConfirm} onCancel={handleCancel} />}
+      {activeTab === "pending" && canApprove && <BookingsList bookings={bookings} rooms={rooms} type="pending" currentUserId={currentUserId} canApprove={canApprove} onConfirm={handleConfirm} onCancel={handleCancel} />}
+      {activeTab === "history" && <BookingsList bookings={bookings} rooms={rooms} type="history" currentUserId={currentUserId} canApprove={canApprove} onConfirm={handleConfirm} onCancel={handleCancel} />}
 
       <BookingModal open={modalOpen} onClose={() => setModalOpen(false)} rooms={rooms} bookings={bookings} onCreate={handleCreate} />
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { useUrlState } from "@/hooks/use-url-state";
 import {
   Search, UserPlus, Upload, RefreshCw, Shield, Users,
   GraduationCap, Building2, User, Eye, X, Filter,
@@ -151,9 +152,9 @@ function ImportDialog({ open, onClose, onImport }: {
 
 export default function UserManagementPage() {
   const [users, setUsers] = useState(MOCK_USERS);
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useUrlState("search", "");
+  const [roleFilter, setRoleFilter] = useUrlState("role", "");
+  const [statusFilter, setStatusFilter] = useUrlState("status", "all");
   const [syncing, setSyncing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);

@@ -1,13 +1,20 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useUrlState } from "@/hooks/use-url-state";
+import useSWR from "swr";
 import {
-  Newspaper, Plus, Calendar, ChevronRight, ChevronLeft, Users,
+  Newspaper, Plus, Pencil, Calendar, ChevronRight, ChevronLeft, Users,
   BookOpen, FlaskConical, GraduationCap,
-  Building2, Phone, Mail, MapPin, X, BellRing,
+  Building2, Phone, Mail, MapPin, X, BellRing, Trash2,
   Megaphone, ScrollText, Vote, AlertTriangle, Upload, Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { swrFetcher } from "@/lib/fetcher";
+import { fetchApi } from "@/lib/fetcher";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useHasPermission } from "@/hooks/use-permission";
 
 /* ==============================================================================
@@ -17,7 +24,7 @@ import { useHasPermission } from "@/hooks/use-permission";
 type TabId = "announcements" | "calendar" | "contacts";
 
 interface Announcement {
-  id: string; title: string; content: string; category: string; publisher: string; date: string; status: string;
+  id: string; title: string; content: string; category: string; publisher: string; publisherUserId: string; date: string; status: string;
 }
 
 interface CalendarEvent {
@@ -47,16 +54,6 @@ const CATEGORIES = [
 ];
 
 const SUBSCRIBE_CATS = CATEGORIES.filter(c => c.key !== "ทั้งหมด");
-
-const MOCK_ANNOUNCEMENTS: Announcement[] = [
-  { id: "1", title: "ประกาศรายชื่อผู้มีสิทธิ์สอบข้อเขียน ประจำปีการศึกษา 2568", content: "ตามที่คณะนิติศาสตร์ มหาวิทยาลัยธรรมศาสตร์ ได้ดำเนินการรับสมัครสอบข้อเขียนประจำปีการศึกษา 2568 บัดนี้การตรวจสอบคุณสมบัติเสร็จสิ้นแล้ว จึงขอประกาศรายชื่อผู้มีสิทธิ์สอบข้อเขียนดังรายละเอียดแนบท้ายประกาศนี้ ผู้มีรายชื่อสามารถเข้ารับการสอบได้ในวันที่ 31 กรกฎาคม 2568 ณ อาคารคณะนิติศาสตร์ ชั้น 5", category: "ประกาศผล", publisher: "ฝ่ายวิชาการ", date: "2025-07-09", status: "published" },
-  { id: "2", title: "ขอเชิญร่วมงานสัมมนาวิชาการประจำปี 2568", content: "คณะนิติศาสตร์ มหาวิทยาลัยธรรมศาสตร์ ขอเชิญคณาจารย์ นักศึกษา และผู้สนใจ เข้าร่วมงานสัมมนาวิชาการประจำปี 2568 ในหัวข้อ 'การปฏิรูปกฎหมายไทยในยุคดิจิทัล' วิทยากรรับเชิญ ศาสตราจารย์ ดร.สมชาย ใจดี วันศุกร์ที่ 15 สิงหาคม 2568 เวลา 09.00-16.30 น. ณ ห้องประชุมใหญ่ ชั้น 5 ลงทะเบียนฟรี ไม่มีค่าใช้จ่าย", category: "เชิญชวน", publisher: "งานวิจัยและนวัตกรรม", date: "2025-07-08", status: "published" },
-  { id: "3", title: "แจ้งกำหนดการลงทะเบียนเรียน ภาค 1/2568", content: "กำหนดการลงทะเบียนเรียนภาคการศึกษาที่ 1 ปีการศึกษา 2568 นักศึกษาชั้นปีที่ 2-4: วันที่ 1-5 สิงหาคม 2568 นักศึกษาชั้นปีที่ 1: วันที่ 8-12 สิงหาคม 2568 ภาคการศึกษาที่ 1 เริ่มวันที่ 18 สิงหาคม 2568 กรุณาตรวจสอบตารางเรียนก่อนลงทะเบียน", category: "ประกาศด่วน", publisher: "ฝ่ายวิชาการ", date: "2025-07-07", status: "published" },
-  { id: "4", title: "นโยบายการใช้อาคารเรียนคณะนิติศาสตร์ ประจำปี 2568", content: "คณะนิติศาสตร์กำหนดนโยบายการใช้อาคารเรียนดังนี้: 1. เปิดให้เข้าใช้อาคารทุกวันจันทร์-ศุกร์ 07.00-20.00 น. 2. วันเสาร์-อาทิตย์ 08.00-17.00 น. 3. ห้องสมุดเปิดบริการทุกวัน 09.00-18.00 น. 4. ห้ามสูบบุหรี่ในบริเวณอาคาร 5. จองห้องประชุมผ่านระบบ Book Meeting", category: "นโยบาย", publisher: "สำนักงานคณะ", date: "2025-07-05", status: "published" },
-  { id: "5", title: "ขยายเวลารับสมัครทุนการศึกษาประจำปี 2568", content: "ตามที่งานกิจการนักศึกษาได้เปิดรับสมัครทุนการศึกษาประจำปี 2568 จำนวน 5 ทุน ได้แก่: ทุนเรียนดี ทุนช่วยเหลือนักศึกษาขาดแคลน ทุนพัฒนากิจกรรมนักศึกษา ทุนวิจัย ทุนเรียนดีด้านกฎหมายระหว่างประเทศ บัดนี้ขยายเวลารับสมัครถึงวันที่ 31 กรกฎาคม 2568", category: "เชิญชวน", publisher: "งานกิจการนักศึกษา", date: "2025-07-03", status: "published" },
-  { id: "6", title: "ประกาศผลการคัดเลือกอาจารย์ประจำคณะ", content: "คณะนิติศาสตร์ มธ. ขอประกาศผลการคัดเลือกอาจารย์ประจำคณะ จำนวน 2 ตำแหน่ง ได้แก่ 1. นายธรรมนูญ วงศ์วิเศษ สาขากฎหมายอาญา 2. นางสาวพิมพ์ใจ รักนิติศาสตร์ สาขากฎหมายระหว่างประเทศ ให้มารายงานตัววันที่ 1 สิงหาคม 2568 ณ สำนักงานคณะ", category: "ประกาศผล", publisher: "ฝ่ายบุคคล", date: "2025-07-01", status: "published" },
-  { id: "7", title: "เร่งด่วน: เปลี่ยนแปลงวันหยุดภาคการศึกษา", content: "คณะนิติศาสตร์ได้รับแจ้งจากมหาวิทยาลัยให้เปลี่ยนแปลงวันหยุดภาคการศึกษา เนื่องจากมีพิธีพระราชทานปริญญาบัตร ให้นักศึกษาหยุดเรียนวันที่ 20-22 กรกฎาคมนี้ และชดเชยวันที่ 5-7 สิงหาคมแทน", category: "ประกาศด่วน", publisher: "สำนักงานคณะ", date: "2025-06-28", status: "published" },
-];
 
 const MOCK_DEPARTMENTS: Department[] = [
   { name: "สำนักงานคณะนิติศาสตร์", phone: "02-613-2101", email: "law@tu.ac.th", location: "อาคารคณะนิติศาสตร์ ชั้น 1" },
@@ -88,12 +85,14 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
   { id: "e10", day: 30, title: "กำหนดส่งเกรด", category: "deadline", time: "ภายใน 16:00" },
 ];
 
-const MONTH = "กรกฎาคม";
-const YEAR = 2568;
-const DAYS_IN_MONTH = 31;
-const START_DAY = 2; // Tuesday
+const now = new Date();
+const THAI_MONTHS = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+const MONTH = THAI_MONTHS[now.getMonth()];
+const YEAR = now.getFullYear() + 543;
+const DAYS_IN_MONTH = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+const START_DAY = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
 const DAY_HEADERS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-const TODAY = 9;
+const TODAY = now.getDate();
 
 const ORG_STATS = [
   { label: "บุคลากร", value: 48, icon: Users, color: "text-tu-primary", bg: "bg-tu-primary-soft" },
@@ -101,6 +100,91 @@ const ORG_STATS = [
   { label: "งานวิจัย", value: 85, icon: FlaskConical, color: "text-tu-success", bg: "bg-tu-success/10" },
   { label: "นักศึกษา", value: 2500, icon: GraduationCap, color: "text-tu-warning", bg: "bg-tu-warning/10" },
 ];
+
+/* ==============================================================================
+   Edit Announcement Modal
+   ============================================================================== */
+
+function EditModal({ open, onClose, onSave, ann }: {
+  open: boolean; onClose: () => void;
+  onSave: (id: string, title: string, content: string, category: string) => void;
+  ann: Announcement | null;
+}) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [cat, setCat] = useState("ประกาศด่วน");
+  const [ddOpen, setDdOpen] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ann) {
+      setTitle(ann.title);
+      setContent(ann.content);
+      setCat(ann.category);
+      setFileName(null);
+    }
+  }, [ann]);
+
+  const handleSave = () => {
+    if (!title.trim() || !ann) return;
+    onSave(ann.id, title.trim(), content.trim(), cat);
+    setTitle(""); setContent(""); setCat("ประกาศด่วน"); setFileName(null);
+    onClose();
+  };
+
+  if (!open || !ann) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-tu-surface rounded-[--radius-dialog] border border-tu-border shadow-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-tu-text-primary">แก้ไขประกาศ</h2>
+          <button onClick={onClose} className="p-1 rounded-md text-tu-text-muted hover:bg-tu-surface-hover"><X size={18} /></button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">ชื่อประกาศ <span className="text-tu-error">*</span></label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="ระบุชื่อประกาศ..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">เนื้อหา</label>
+            <textarea value={content} onChange={e => setContent(e.target.value)} rows={4} placeholder="ระบุเนื้อหาประกาศ..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 outline-none resize-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">อัปโหลดไฟล์</label>
+            <input ref={fileRef} type="file" className="hidden" onChange={e => setFileName(e.target.files?.[0]?.name ?? null)} />
+            <button onClick={() => fileRef.current?.click()} className="w-full flex items-center gap-2 rounded-[--radius-input] border border-dashed border-tu-border bg-tu-surface px-3 py-3 text-sm text-tu-text-muted hover:border-tu-primary hover:text-tu-primary transition-colors">
+              <Upload size={16} />{fileName ?? "คลิกเพื่อเลือกไฟล์ใหม่ (ตัวเลือก)"}
+            </button>
+          </div>
+          <div className="relative">
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">หมวดหมู่ <span className="text-tu-error">*</span></label>
+            <button onClick={() => setDdOpen(!ddOpen)} className="w-full flex items-center justify-between rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors">
+              <span className="flex items-center gap-2">
+                {(() => { const c = CATEGORIES.find(x => x.key === cat) ?? CATEGORIES[1]; const I = c.icon; return <><I size={14} className={c.text} /><span className="text-tu-text-primary">{cat}</span></>; })()}
+              </span>
+              <span className="text-tu-text-muted text-xs">▾</span>
+            </button>
+            {ddOpen && (
+              <div className="absolute top-full mt-1 w-full bg-tu-surface border border-tu-border rounded-lg shadow-lg z-10 py-1">
+                {CATEGORIES.filter(c => c.key !== "ทั้งหมด").map(c => (
+                  <button key={c.key} onClick={() => { setCat(c.key); setDdOpen(false); }} className={cn("w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors", cat === c.key && "bg-tu-primary-soft")}>
+                    <c.icon size={14} className={c.text} /><span className="text-tu-text-primary">{c.key}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-2 mt-6 justify-end">
+          <button onClick={onClose} className="rounded-[--radius-btn] border border-tu-border px-4 py-2 text-sm font-medium text-tu-text-secondary hover:bg-tu-surface-hover transition-colors">ยกเลิก</button>
+          <button onClick={handleSave} disabled={!title.trim()} className="rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed">บันทึก</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ==============================================================================
    Create Announcement Modal
@@ -197,8 +281,8 @@ function EventCreateModal({ open, onClose, onCreate }: {
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("12:00");
   const [ddOpen, setDdOpen] = useState(false);
-  const [pickedDay, setPickedDay] = useState<number | null>(null);
-  const [calMonth, setCalMonth] = useState(6); // July
+  const [pickedDay, setPickedDay] = useState<number | null>(TODAY);
+  const [calMonth, setCalMonth] = useState(now.getMonth());
 
   const handleCreate = () => {
     if (!title.trim() || !pickedDay) return;
@@ -210,8 +294,8 @@ function EventCreateModal({ open, onClose, onCreate }: {
   if (!open) return null;
 
   const monthName = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"][calMonth];
-  const calDaysInMonth = calMonth === 6 ? 31 : 30;
-  const calStartDay = calMonth === 6 ? 2 : 0;
+  const calDaysInMonth = new Date(now.getFullYear(), calMonth + 1, 0).getDate();
+  const calStartDay = new Date(now.getFullYear(), calMonth, 1).getDay();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -295,6 +379,87 @@ function EventCreateModal({ open, onClose, onCreate }: {
 }
 
 /* ==============================================================================
+   Event Edit Modal
+   ============================================================================== */
+
+function EventEditModal({ open, onClose, onSave, event }: {
+  open: boolean; onClose: () => void;
+  onSave: (title: string, category: string, time: string) => void;
+  event: CalendarEvent | null;
+}) {
+  const [title, setTitle] = useState(event?.title ?? "");
+  const [cat, setCat] = useState(event?.category ?? "meeting");
+  const [startTime, setStartTime] = useState(event?.time?.split(" - ")[0] ?? "09:00");
+  const [endTime, setEndTime] = useState(event?.time?.split(" - ")[1] ?? "12:00");
+  const [ddOpen, setDdOpen] = useState(false);
+
+  useEffect(() => {
+    if (event) {
+      setTitle(event.title);
+      setCat(event.category);
+      setStartTime(event.time?.split(" - ")[0] ?? "09:00");
+      setEndTime(event.time?.split(" - ")[1] ?? "12:00");
+    }
+  }, [event]);
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    onSave(title.trim(), cat, `${startTime} - ${endTime}`);
+    onClose();
+  };
+
+  if (!open || !event) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-tu-surface rounded-[--radius-dialog] border border-tu-border shadow-xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-tu-text-primary">แก้ไขกิจกรรม</h2>
+          <button onClick={onClose} className="p-1 rounded-md text-tu-text-muted hover:bg-tu-surface-hover"><X size={18} /></button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">หัวข้อ <span className="text-tu-error">*</span></label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 outline-none" />
+          </div>
+          <div className="relative">
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">หมวดหมู่</label>
+            <button onClick={() => setDdOpen(!ddOpen)} className="w-full flex items-center justify-between rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors">
+              <span className="flex items-center gap-2">
+                <span className={cn("h-2.5 w-2.5 rounded-full", CALENDAR_CATEGORIES[cat]?.color)} />
+                <span className="text-tu-text-primary">{CALENDAR_CATEGORIES[cat]?.label}</span>
+              </span>
+              <span className="text-tu-text-muted text-xs">▾</span>
+            </button>
+            {ddOpen && (
+              <div className="absolute top-full mt-1 w-full bg-tu-surface border border-tu-border rounded-lg shadow-lg z-10 py-1">
+                {Object.entries(CALENDAR_CATEGORIES).map(([key, val]) => (
+                  <button key={key} onClick={() => { setCat(key); setDdOpen(false); }} className={cn("w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors", cat === key && "bg-tu-primary-soft")}>
+                    <span className={cn("h-2.5 w-2.5 rounded-full", val.color)} /><span className="text-tu-text-primary">{val.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">เวลา</label>
+            <div className="flex items-center gap-2">
+              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="flex-1 rounded-[--radius-input] border border-tu-border bg-tu-surface px-2 py-2 text-sm focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 outline-none" />
+              <span className="text-tu-text-muted text-xs">—</span>
+              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="flex-1 rounded-[--radius-input] border border-tu-border bg-tu-surface px-2 py-2 text-sm focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 outline-none" />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-6 justify-end">
+          <button onClick={onClose} className="rounded-[--radius-btn] border border-tu-border px-4 py-2 text-sm font-medium text-tu-text-secondary hover:bg-tu-surface-hover transition-colors">ยกเลิก</button>
+          <button onClick={handleSave} disabled={!title.trim()} className="rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed">บันทึก</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================================================================
    Detail Modal
    ============================================================================== */
 
@@ -330,33 +495,69 @@ function DetailModal({ ann, open, onClose }: { ann: Announcement | null; open: b
    Announcements Tab
    ============================================================================== */
 
-function AnnouncementsTab({ announcements, canCreate }: { announcements: Announcement[]; canCreate: boolean }) {
-  const [selectedFilter, setSelectedFilter] = useState("ทั้งหมด");
+function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, currentUserId, onMutate }: { announcements: Announcement[]; canCreate: boolean; canEdit: boolean; canDelete: boolean; currentUserId: string; onMutate: () => void }) {
+  const [selectedFilter, setSelectedFilter] = useUrlState("filter", "ทั้งหมด");
   const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
+  const [subLoading, setSubLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [detailAnn, setDetailAnn] = useState<Announcement | null>(null);
-  const [anns, setAnns] = useState(announcements);
+  const [editAnn, setEditAnn] = useState<Announcement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  // Load subscriptions from API
+  useSWR("/api/intranet/subscriptions", swrFetcher, {
+    onSuccess(data) {
+      const subs = (data as unknown as Array<{ category?: { name: string }; isSubscribed: boolean }>) ?? [];
+      setSubscribed(new Set(subs.filter((s) => s.isSubscribed).map((s) => s.category?.name).filter(Boolean) as string[]));
+    },
+  });
 
   const filtered = selectedFilter === "ทั้งหมด"
-    ? anns
-    : anns.filter(a => a.category === selectedFilter);
+    ? announcements
+    : announcements.filter(a => a.category === selectedFilter);
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { "ทั้งหมด": anns.length };
-    anns.forEach(a => { counts[a.category] = (counts[a.category] ?? 0) + 1; });
+    const counts: Record<string, number> = { "ทั้งหมด": announcements.length };
+    announcements.forEach(a => { counts[a.category] = (counts[a.category] ?? 0) + 1; });
     return counts;
-  }, [anns]);
+  }, [announcements]);
 
-  const handleSubscribe = (cat: string) => {
-    setSubscribed(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; });
+  const handleSubscribe = async (cat: string) => {
+    setSubLoading(true);
+    const isSubscribed = !subscribed.has(cat);
+    setSubscribed(prev => { const n = new Set(prev); isSubscribed ? n.add(cat) : n.delete(cat); return n; });
+    try {
+      await fetchApi("/api/intranet/subscriptions", { method: "POST", body: JSON.stringify({ categoryName: cat, isSubscribed }) });
+    } catch {
+      // Revert on error
+      setSubscribed(prev => { const n = new Set(prev); isSubscribed ? n.delete(cat) : n.add(cat); return n; });
+    }
+    setSubLoading(false);
   };
 
-  const handleCreate = (title: string, content: string, category: string) => {
-    const newAnn: Announcement = {
-      id: String(Date.now()), title, content, category,
-      publisher: "ฉัน", date: new Date().toISOString().slice(0, 10), status: "published",
-    };
-    setAnns(prev => [newAnn, ...prev]);
+  const handleCreate = async (title: string, content: string, category: string) => {
+    try { await fetchApi("/api/announcements", { method: "POST", body: JSON.stringify({ title, content, category }) }); } catch {}
+    await onMutate();
+  };
+
+  const handleEdit = (ann: Announcement) => {
+    setEditAnn({ ...ann });
+    setEditModalOpen(true);
+  };
+
+  const handleEditSave = async (id: string, title: string, content: string, category: string) => {
+    try { await fetchApi("/api/announcements", { method: "PUT", body: JSON.stringify({ id, title, content, category }) }); } catch {}
+    await onMutate();
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleting(id);
+    try { await fetchApi(`/api/announcements?id=${id}`, { method: "DELETE" }); } catch {}
+    setDeleting(null);
+    setDeleteTarget(null);
+    await onMutate();
   };
 
   return (
@@ -420,9 +621,21 @@ function AnnouncementsTab({ announcements, canCreate }: { announcements: Announc
                     <span className="text-xs text-tu-text-muted">{new Date(ann.date).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" })}</span>
                   </div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); setDetailAnn(ann); }} className="p-1 rounded-md text-tu-text-muted hover:text-tu-primary hover:bg-tu-primary-soft transition-colors">
-                  <ChevronRight size={16} />
-                </button>
+                <div className="flex items-center gap-1">
+                  {canEdit && ann.publisherUserId === currentUserId && (
+                    <button onClick={(e) => { e.stopPropagation(); handleEdit(ann); }} className="p-1.5 rounded-md text-tu-text-muted hover:text-tu-info hover:bg-tu-info/10 transition-colors" title="แก้ไข">
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                  {canDelete && ann.publisherUserId === currentUserId && (
+                    <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(ann); }} disabled={deleting === ann.id} className="p-1.5 rounded-md text-tu-text-muted hover:text-tu-error hover:bg-tu-error/10 transition-colors disabled:opacity-50" title="ลบ">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                  <button onClick={e => { e.stopPropagation(); setDetailAnn(ann); }} className="p-1 rounded-md text-tu-text-muted hover:text-tu-primary hover:bg-tu-primary-soft transition-colors">
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -430,7 +643,17 @@ function AnnouncementsTab({ announcements, canCreate }: { announcements: Announc
       </div>
 
       <CreateModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={handleCreate} />
+      <EditModal open={editModalOpen} onClose={() => setEditModalOpen(false)} onSave={handleEditSave} ann={editAnn} />
       <DetailModal ann={detailAnn} open={!!detailAnn} onClose={() => setDetailAnn(null)} />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="ยืนยันลบประกาศ"
+        message={`คุณต้องการลบ "${deleteTarget?.title ?? ""}" ใช่หรือไม่?`}
+        confirmLabel="ลบ"
+        variant="danger"
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
@@ -439,16 +662,66 @@ function AnnouncementsTab({ announcements, canCreate }: { announcements: Announc
    Calendar Tab
    ============================================================================== */
 
-function CalendarTab() {
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+function CalendarTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: boolean }) {
+  const now = new Date();
+  const [calMonth, setCalMonth] = useState(now.getMonth());
+  const [calYear, setCalYear] = useState(now.getFullYear());
+  const [selectedDay, setSelectedDay] = useState<number | null>(TODAY);
   const [events, setEvents] = useState(CALENDAR_EVENTS);
+
+  const monthName = THAI_MONTHS[calMonth];
+  const calYearThai = calYear + 543;
+  const calDaysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const calStartDay = new Date(calYear, calMonth, 1).getDay();
+  const calToday = now.getMonth() === calMonth && now.getFullYear() === calYear ? now.getDate() : -1;
+
+  const goPrevMonth = () => {
+    if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); }
+    else { setCalMonth(calMonth - 1); }
+  };
+  const goNextMonth = () => {
+    if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); }
+    else { setCalMonth(calMonth + 1); }
+  };
   const [createOpen, setCreateOpen] = useState(false);
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
+  const [calDeleteTarget, setCalDeleteTarget] = useState<CalendarEvent | null>(null);
+
+  // Fetch from API
+  useEffect(() => {
+    fetch("/api/intranet/calendar").then(r => r.json()).then(j => {
+      if (j.success && j.data?.length) setEvents(j.data);
+    }).catch(() => {});
+  }, []);
 
   const selectedEvents = selectedDay ? events.filter(e => e.day === selectedDay) : [];
   const allDaysEvents = (day: number) => events.filter(e => e.day === day);
 
-  const handleCreate = (title: string, category: string, time: string, day: number) => {
-    setEvents(prev => [{ id: String(Date.now()), title, category, time, day }, ...prev]);
+  const handleCreate = async (title: string, category: string, time: string, day: number) => {
+    try {
+      const res = await fetchApi("/api/intranet/calendar", { method: "POST", body: JSON.stringify({ title, category, time, day }) });
+      setEvents(prev => [res as unknown as CalendarEvent, ...prev]);
+    } catch { /* fallback */ }
+  };
+
+  const handleEdit = (ev: CalendarEvent) => {
+    setEditEvent({ ...ev });
+  };
+
+  const handleEditSave = async (id: string, title: string, category: string, time: string) => {
+    try {
+      await fetchApi("/api/intranet/calendar", { method: "PUT", body: JSON.stringify({ id, title, category, time }) });
+      setEvents(prev => prev.map(e => e.id === id ? { ...e, title, category, time } : e));
+    } catch { /* fallback */ }
+    setEditEvent(null);
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await fetchApi(`/api/intranet/calendar?id=${id}`, { method: "DELETE" });
+      setEvents(prev => prev.filter(e => e.id !== id));
+    } catch { /* fallback */ }
+    setCalDeleteTarget(null);
   };
 
   return (
@@ -456,9 +729,9 @@ function CalendarTab() {
       {/* Calendar (left) */}
       <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-5 lg:basis-[70%] shrink-0">
         <div className="flex items-center justify-between mb-4">
-          <button className="p-1 rounded hover:bg-tu-surface-hover text-tu-text-muted"><ChevronLeft size={16} /></button>
-          <h3 className="text-base font-semibold text-tu-text-primary">{MONTH} {YEAR}</h3>
-          <button className="p-1 rounded hover:bg-tu-surface-hover text-tu-text-muted"><ChevronRight size={16} /></button>
+          <button onClick={goPrevMonth} className="p-1 rounded hover:bg-tu-surface-hover text-tu-text-muted"><ChevronLeft size={16} /></button>
+          <h3 className="text-base font-semibold text-tu-text-primary">{monthName} {calYearThai}</h3>
+          <button onClick={goNextMonth} className="p-1 rounded hover:bg-tu-surface-hover text-tu-text-muted"><ChevronRight size={16} /></button>
         </div>
 
         <div className="grid grid-cols-7 text-center mb-2">
@@ -468,9 +741,9 @@ function CalendarTab() {
         </div>
 
         <div className="grid grid-cols-7 text-center border-t border-l border-tu-border/50 rounded-lg overflow-hidden">
-          {Array.from({ length: START_DAY }, (_, i) => <div key={`e${i}`} className="py-1 border-r border-b border-tu-border/50" />)}
-          {Array.from({ length: DAYS_IN_MONTH }, (_, i) => i + 1).map(day => {
-            const isToday = day === TODAY;
+          {Array.from({ length: calStartDay }, (_, i) => <div key={`e${i}`} className="py-1 border-r border-b border-tu-border/50" />)}
+          {Array.from({ length: calDaysInMonth }, (_, i) => i + 1).map(day => {
+            const isToday = day === calToday;
             const isSelected = day === selectedDay;
             const dayEvents = allDaysEvents(day);
             const uniqueCats = [...new Set(dayEvents.map(e => e.category))];
@@ -510,7 +783,7 @@ function CalendarTab() {
         </div>
         {selectedDay ? (
           <>
-            <h4 className="text-sm font-semibold text-tu-text-primary mb-3">วันที่ {selectedDay} {MONTH}</h4>
+            <h4 className="text-sm font-semibold text-tu-text-primary mb-3">วันที่ {selectedDay} {monthName}</h4>
             {selectedEvents.length === 0 ? (
               <p className="text-xs text-tu-text-muted py-8 text-center">ไม่มีกิจกรรมในวันนี้</p>
             ) : (
@@ -518,12 +791,20 @@ function CalendarTab() {
                 {selectedEvents.map(ev => {
                   const cat = CALENDAR_CATEGORIES[ev.category];
                   return (
-                    <div key={ev.id} className="flex items-start gap-3 p-3 bg-tu-bg rounded-lg">
+                    <div key={ev.id} className="flex items-start gap-3 p-3 bg-tu-bg rounded-lg group">
                       <span className={cn("mt-1 h-2.5 w-2.5 rounded-full shrink-0", cat?.color)} />
-                      <div>
+                      <div className="flex-1">
                         <p className="text-sm text-tu-text-primary font-medium">{ev.title}</p>
                         <p className="text-xs text-tu-text-muted mt-0.5">{ev.time}</p>
                         <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium mt-1", cat?.bg, cat?.color.replace("bg-", "text-"))}>{cat?.label}</span>
+                      </div>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {canEdit && (
+                          <button onClick={() => handleEdit(ev)} className="p-1 rounded text-tu-text-muted hover:text-tu-info hover:bg-tu-info/10" title="แก้ไข"><Pencil size={12} /></button>
+                        )}
+                        {canDelete && (
+                          <button onClick={() => setCalDeleteTarget(ev)} className="p-1 rounded text-tu-text-muted hover:text-tu-error hover:bg-tu-error/10" title="ลบ"><Trash2 size={12} /></button>
+                        )}
                       </div>
                     </div>
                   );
@@ -539,6 +820,16 @@ function CalendarTab() {
         )}
       </div>
       <EventCreateModal open={createOpen} onClose={() => setCreateOpen(false)} onCreate={handleCreate} />
+      <EventEditModal open={!!editEvent} onClose={() => setEditEvent(null)} onSave={(title, category, time) => editEvent && handleEditSave(editEvent.id, title, category, time)} event={editEvent} />
+      <ConfirmDialog
+        open={!!calDeleteTarget}
+        title="ยืนยันลบกิจกรรม"
+        message={`คุณต้องการลบ "${calDeleteTarget?.title ?? ""}" ใช่หรือไม่?`}
+        confirmLabel="ลบ"
+        variant="danger"
+        onConfirm={() => calDeleteTarget && handleDelete(calDeleteTarget.id)}
+        onCancel={() => setCalDeleteTarget(null)}
+      />
     </div>
   );
 }
@@ -572,11 +863,38 @@ function ContactsTab({ departments }: { departments: Department[] }) {
    ============================================================================== */
 
 export default function IntranetPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("announcements");
+  const [activeTab, setActiveTab] = useUrlState<TabId>("tab", "announcements");
+  const { data: session } = useSession();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? "";
   const canCreate = useHasPermission("INTRANET_CREATE");
+  const canEdit = useHasPermission("INTRANET_EDIT");
+  const canDelete = useHasPermission("INTRANET_DELETE");
+
+  // Fetch announcements from API
+  const { data: apiAnnouncements, isLoading: annLoading, mutate: mutateAnns } = useSWR("/api/announcements", swrFetcher);
+  const announcements: Announcement[] = Array.isArray(apiAnnouncements) ? apiAnnouncements : [];
+
+  // Fetch org stats from API
+  const { data: apiStats } = useSWR("/api/intranet/stats", swrFetcher<Record<string, number>>);
+  const orgStats = apiStats
+    ? [
+        { label: "บุคลากร", value: (apiStats as unknown as Record<string, number>).personnel ?? 48, icon: Users, color: "text-tu-primary", bg: "bg-tu-primary-soft" },
+        { label: "หลักสูตร", value: (apiStats as unknown as Record<string, number>).curriculum ?? 12, icon: BookOpen, color: "text-tu-info", bg: "bg-tu-info/10" },
+        { label: "งานวิจัย", value: 85, icon: FlaskConical, color: "text-tu-success", bg: "bg-tu-success/10" },
+        { label: "นักศึกษา", value: (apiStats as unknown as Record<string, number>).students ?? 2500, icon: GraduationCap, color: "text-tu-warning", bg: "bg-tu-warning/10" },
+      ]
+    : ORG_STATS;
+
+  // Fetch departments from API
+  const { data: apiDepts } = useSWR("/api/intranet/departments", swrFetcher<Department[]>);
+  const departments: Department[] = (apiDepts as unknown as Department[])?.length
+    ? (apiDepts as unknown as Department[])
+    : MOCK_DEPARTMENTS;
 
   return (
     <div className="p-6 space-y-6">
+
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold text-tu-text-primary">อินทราเน็ตคณะ</h1>
@@ -584,16 +902,20 @@ export default function IntranetPage() {
       </div>
 
       {/* Org Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {ORG_STATS.map(s => (
-          <div key={s.label} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 flex items-center gap-3">
-            <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", s.bg)}><s.icon size={20} className={s.color} /></div>
-            <div><p className="text-lg font-bold text-tu-text-primary">{s.value.toLocaleString("th-TH")}</p><p className="text-xs text-tu-text-muted">{s.label}</p></div>
-          </div>
-        ))}
-      </div>
+      {annLoading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[1,2,3,4].map(i => <div key={i} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 h-[72px] animate-pulse" />)}</div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {orgStats.map(s => (
+            <div key={s.label} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 flex items-center gap-3">
+              <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", s.bg)}><s.icon size={20} className={s.color} /></div>
+              <div><p className="text-lg font-bold text-tu-text-primary">{s.value.toLocaleString("th-TH")}</p><p className="text-xs text-tu-text-muted">{s.label}</p></div>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* Tab selector with icons */}
+      {/* Tab selector */}
       <div className="flex gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5 w-fit">
         {TABS.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -605,9 +927,9 @@ export default function IntranetPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "announcements" && <AnnouncementsTab announcements={MOCK_ANNOUNCEMENTS} canCreate={canCreate} />}
-      {activeTab === "calendar" && <CalendarTab />}
-      {activeTab === "contacts" && <ContactsTab departments={MOCK_DEPARTMENTS} />}
+      {activeTab === "announcements" && <AnnouncementsTab announcements={announcements} canCreate={canCreate} canEdit={canEdit} canDelete={canDelete} currentUserId={currentUserId} onMutate={mutateAnns} />}
+      {activeTab === "calendar" && <CalendarTab canEdit={canEdit} canDelete={canDelete} />}
+      {activeTab === "contacts" && <ContactsTab departments={departments} />}
     </div>
   );
 }

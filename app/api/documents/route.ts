@@ -4,11 +4,14 @@ import type { NextRequest } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiSuccess, parsePagination } from "@/lib/api-utils";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, type RoleCode } from "@/lib/permissions";
+import { resolveDataScope, buildDocumentPoolWhere } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const roles = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];
+  const userId = (session?.user as { id?: string })?.id ?? "";
+  const departmentId = (session?.user as { departmentId?: number | null })?.departmentId ?? null;
   if (!session?.user?.email || !hasPermission(roles, "DOCUMENTS_VIEW")) {
     return NextResponse.json({ success: false, error: { code: "FORBIDDEN", message: "ไม่มีสิทธิ์ดูเอกสาร" } }, { status: 403 });
   }
@@ -19,12 +22,27 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search") || "";
     const pool = searchParams.get("pool") || "";
 
+    // Apply data scope based on role
+    const scope = resolveDataScope(roles as RoleCode[], departmentId, userId);
+
     const where: Record<string, unknown> = {};
     if (search) {
       where.title = { contains: search };
     }
+
+    // Apply pool-based scope
     if (pool) {
-      where.poolType = pool;
+      const poolWhere = buildDocumentPoolWhere(scope, pool);
+      Object.assign(where, poolWhere);
+    } else {
+      // No pool specified — filter by what user can access
+      if (!scope.canSeeAllDepartments) {
+        where.OR = [
+          { poolType: "central" },
+          ...(scope.departmentId !== null ? [{ departmentId: scope.departmentId, poolType: "department" as const }] : []),
+          ...(scope.ownerUserId !== null ? [{ ownerId: scope.ownerUserId, poolType: "personal" as const }] : []),
+        ];
+      }
     }
 
     const [data, total] = await Promise.all([
@@ -94,5 +112,37 @@ export async function POST(req: Request) {
     return apiSuccess({ id: document.id, title: document.title });
   } catch {
     return apiError("DB_ERROR", "ไม่สามารถอัปโหลดเอกสารได้");
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  const roles = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];
+  if (!session?.user?.email || !hasPermission(roles, "DOCUMENTS_DELETE")) {
+    return NextResponse.json({ success: false, error: { code: "FORBIDDEN", message: "ไม่มีสิทธิ์ลบเอกสาร" } }, { status: 403 });
+  }
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return apiError("VALIDATION", "กรุณาระบุรหัสเอกสาร");
+    }
+
+    const doc = await prisma.document.findUnique({ where: { id }, include: { storageFile: true } });
+    if (!doc) {
+      return apiError("NOT_FOUND", "ไม่พบเอกสาร");
+    }
+
+    // Soft-delete document and its storage file
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.document.update({ where: { id }, data: { deletedAt: now } }),
+      prisma.storageFile.update({ where: { id: doc.storageFileId }, data: { deletedAt: now } }),
+    ]);
+
+    return apiSuccess({ id, deletedAt: now.toISOString() });
+  } catch {
+    return apiError("DB_ERROR", "ไม่สามารถลบเอกสารได้");
   }
 }

@@ -113,6 +113,7 @@ model Role {
   id        Int        @id @default(autoincrement())
   roleCode  String     @unique @map("role_code") @db.VarChar(50)
   nameTh    String     @map("name_th") @db.VarChar(100)
+  level     Int        @default(10)
   createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   userRoles UserRole[]
@@ -170,7 +171,6 @@ model User {
   goodsReceipts  ErpGoodsReceipt[]          @relation("GoodsReceiver")
   roomBookings   RoomBooking[]              @relation("RoomBookingUser")
   teachingLoads  AcademicTeachingLoad[]     @relation("TeachingLoadUser")
-  helpdeskTickets HelpdeskTicket[]          @relation("TicketRequester")
   publishedAnnouncements Announcement[]     @relation("AnnouncementPublisher")
 
   @@map("users")
@@ -1526,58 +1526,4 @@ model RoomBooking {
   user          User        @relation("RoomBookingUser", fields: [userId], references: [id])
 
   @@map("room_bookings")
-}
-
-// ==============================================================================
-// 22. Helpdesk / IT Support
-// ==============================================================================
-
-model HelpdeskTicket {
-  id              String                 @id @default(uuid()) @db.Uuid
-  requesterUserId String                 @map("requester_user_id") @db.Uuid
-  title           String                 @db.VarChar(255)
-  description     String?                @db.Text
-  priority        String                 @default("medium") @db.VarChar(50)
-  category        String?                @db.VarChar(100)
-  status          String                 @default("open") @db.VarChar(50)
-  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt       DateTime?              @map("deleted_at") @db.Timestamptz(6)
-  createdBy       String?                @map("created_by") @db.Uuid
-  updatedBy       String?                @map("updated_by") @db.Uuid
-  deletedBy       String?                @map("deleted_by") @db.Uuid
-  requester       User                   @relation("TicketRequester", fields: [requesterUserId], references: [id])
-  histories       HelpdeskTicketHistory[]
-
-  @@map("helpdesk_tickets")
-}
-
-model HelpdeskSla {
-  id                 Int       @id @default(autoincrement())
-  priority           String    @db.VarChar(50)
-  resolveWithinHours Int       @map("resolve_within_hours")
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz(6)
-  createdBy          String?   @map("created_by") @db.Uuid
-  updatedBy          String?   @map("updated_by") @db.Uuid
-  deletedBy          String?   @map("deleted_by") @db.Uuid
-
-  @@map("helpdesk_slas")
-}
-
-model HelpdeskTicketHistory {
-  id        String          @id @default(uuid()) @db.Uuid
-  ticketId  String          @map("ticket_id") @db.Uuid
-  oldStatus String?         @map("old_status") @db.VarChar(50)
-  newStatus String          @map("new_status") @db.VarChar(50)
-  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt DateTime?       @map("deleted_at") @db.Timestamptz(6)
-  createdBy String?         @map("created_by") @db.Uuid
-  updatedBy String?         @map("updated_by") @db.Uuid
-  deletedBy String?         @map("deleted_by") @db.Uuid
-  ticket    HelpdeskTicket  @relation(fields: [ticketId], references: [id])
-
-  @@map("helpdesk_ticket_histories")
 }
