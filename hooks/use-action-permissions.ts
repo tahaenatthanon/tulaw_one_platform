@@ -1,7 +1,6 @@
 "use client";
 
-import { useHasPermission, useUserRoles, useRoleLevel, type PermissionCode, type RoleCode } from "@/hooks/use-permission";
-import { ROLE_LEVELS } from "@/lib/permissions";
+import { useHasPermission, type PermissionCode, type RoleCode } from "@/hooks/use-permission";
 
 export { type PermissionCode, type RoleCode } from "@/hooks/use-permission";
 
@@ -118,8 +117,4 @@ export function useActionPermissions() {
   };
 }
 
-/** Returns the highest role level of the current user. */
-export function useRoleLevel(): number {
-  const roles = useUserRoles();
-  return Math.max(0, ...roles.map((r) => ROLE_LEVELS[r] ?? 0));
-}
+
