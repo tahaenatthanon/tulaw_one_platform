@@ -45,7 +45,7 @@ export default function ApplicationHubPage() {
 
   const canPin = useHasMinRoleLevel(30); // Viewer (level 10) cannot pin
 
-  const visibleApps = appGroups.filter((a) => canView[a.id as keyof typeof canView]);
+  const visibleApps: AppGroup[] = appGroups.filter((a) => canView[a.id as keyof typeof canView]);
   const filtered = visibleApps.filter((a) =>
     search === "" || a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase())
   );
