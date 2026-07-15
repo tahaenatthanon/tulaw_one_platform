@@ -1,18 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import useSWR from "swr";
+import { useSession } from "next-auth/react";
 import {
   ShieldCheck, Key, Palette, HardDrive, Settings,
   Plus, X, Trash2, Save, CheckCircle, Copy, Database, Plug, AlertTriangle,
+  Building2, Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { swrFetcher, fetchApi } from "@/lib/fetcher";
 import { useUrlState } from "@/hooks/use-url-state";
+import { useHasPermission } from "@/hooks/use-permission";
 
 /* ==============================================================================
    Types
    ============================================================================== */
 
-type TabId = "auth" | "sso" | "branding" | "storage" | "api-keys" | "categories";
+type TabId = "auth" | "sso" | "branding" | "storage" | "api-keys" | "categories" | "rooms" | "app-status";
 
 interface Category { id: string; name: string; color: string; }
 
@@ -29,6 +34,8 @@ const TABS: { id: TabId; label: string; icon: typeof Settings }[] = [
   { id: "storage", label: "Storage & Projects", icon: HardDrive },
   { id: "api-keys", label: "API Keys", icon: Plug },
   { id: "categories", label: "Categories", icon: Database },
+  { id: "rooms", label: "Meeting Rooms", icon: Building2 },
+  { id: "app-status", label: "App Status", icon: Monitor },
 ];
 
 const BRAND_COLORS = ["#A31D1D", "#FDB813", "#2563EB", "#16A34A", "#DC2626", "#7C3AED", "#DB2777", "#0284C7"];
@@ -137,18 +144,135 @@ function BrandingTab({ form, onChange }: { form: BrandingSettings; onChange: (f:
    Storage Tab
    ============================================================================== */
 
-function StorageTab({ form, onChange }: { form: StorageSettings; onChange: (f: StorageSettings) => void }) {
+function StorageSettingsTab({ form, onChange }: { form: StorageSettings; onChange: (f: StorageSettings) => void }) {
   const [newType, setNewType] = useState("");
-  const [newProj, setNewProj] = useState("");
   const addFileType = () => { if (newType.trim() && !form.fileTypes.includes(newType.trim().toUpperCase())) { onChange({ ...form, fileTypes: [...form.fileTypes, newType.trim().toUpperCase()] }); setNewType(""); } };
   const removeFileType = (t: string) => onChange({ ...form, fileTypes: form.fileTypes.filter(x => x !== t) });
-  const addProjType = () => { if (newProj.trim() && !form.projectTypes.includes(newProj.trim())) { onChange({ ...form, projectTypes: [...form.projectTypes, newProj.trim()] }); setNewProj(""); } };
-  const removeProjType = (t: string) => onChange({ ...form, projectTypes: form.projectTypes.filter(x => x !== t) });
   return (
     <div className="space-y-6">
       <div><h3 className="text-sm font-semibold text-tu-text-primary mb-3">Storage Quota</h3><div className="flex items-center gap-3"><label className="text-sm text-tu-text-secondary">ขนาดสูงสุดต่อผู้ใช้:</label><input type="number" value={form.quota} onChange={e => onChange({ ...form, quota: e.target.value })} min={1} max={100} className="rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm w-24 outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" /><span className="text-sm text-tu-text-secondary">GB</span></div></div>
       <div><h3 className="text-sm font-semibold text-tu-text-primary mb-3">ประเภทไฟล์ที่อนุญาต</h3><div className="flex flex-wrap gap-2 mb-3">{form.fileTypes.map(t => <span key={t} className="inline-flex items-center gap-1 rounded-full bg-tu-primary-soft px-3 py-1 text-xs font-medium text-tu-primary">{t}<button onClick={() => removeFileType(t)} className="ml-1 hover:text-tu-error"><X size={12} /></button></span>)}</div><div className="flex gap-2"><input type="text" value={newType} onChange={e => setNewType(e.target.value)} onKeyDown={e => e.key === "Enter" && addFileType()} placeholder="เพิ่มประเภทไฟล์..." className="rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm flex-1 outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" /><button onClick={addFileType} className="rounded-[--radius-btn] bg-tu-primary px-3 py-2 text-xs font-medium text-white hover:bg-tu-primary-hover transition-colors"><Plus size={14} />เพิ่ม</button></div></div>
-      <div className="border-t border-tu-border pt-5"><h3 className="text-sm font-semibold text-tu-text-primary mb-3">ประเภทโครงการ</h3><div className="flex flex-wrap gap-2 mb-3">{form.projectTypes.map(t => <span key={t} className="inline-flex items-center gap-1 rounded-full bg-tu-secondary-soft px-3 py-1 text-xs font-medium text-tu-text-primary">{t}<button onClick={() => removeProjType(t)} className="ml-1 hover:text-tu-error"><X size={12} /></button></span>)}</div><div className="flex gap-2"><input type="text" value={newProj} onChange={e => setNewProj(e.target.value)} onKeyDown={e => e.key === "Enter" && addProjType()} placeholder="เพิ่มประเภทโครงการ..." className="rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm flex-1 outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" /><button onClick={addProjType} className="rounded-[--radius-btn] bg-tu-primary px-3 py-2 text-xs font-medium text-white hover:bg-tu-primary-hover transition-colors"><Plus size={14} />เพิ่ม</button></div></div>
+    </div>
+  );
+}
+
+/* ==============================================================================
+   API Keys Tab (connected to real API)
+   ============================================================================== */
+
+function ApiKeysTabWrapper() {
+  const { data, mutate } = useSWR("/api/settings", swrFetcher);
+  const settings = (data || {}) as Record<string, Record<string, unknown>>;
+  const keys = (settings.apiKeys || []) as ApiKey[];
+  return <ApiKeysTab keys={keys} onUpdate={(k) => {}} />;
+}
+
+/* ==============================================================================
+   Categories Tab Wrapper
+   ============================================================================== */
+
+function CategoriesTabWrapper() {
+  const [annCats, setAnnCats] = useState<Category[]>(DEFAULT_STORAGE.annCats);
+  const [projCats, setProjCats] = useState<Category[]>(DEFAULT_STORAGE.projCats);
+  return <CategoriesTab annCats={annCats} projCats={projCats} onAnnsChange={setAnnCats} onProjsChange={setProjCats} />;
+}
+
+/* ==============================================================================
+   Meeting Rooms Tab (connected to real API)
+   ============================================================================== */
+
+function MeetingRoomsTab() {
+  const { data: roomsData, mutate } = useSWR("/api/settings/meeting-rooms", swrFetcher);
+  const rooms = (Array.isArray(roomsData) ? roomsData : []) as Array<{ id: string; name: string; capacity: number }>;
+  const [newName, setNewName] = useState("");
+  const [newCap, setNewCap] = useState("10");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editCap, setEditCap] = useState("");
+
+  const addRoom = async () => {
+    if (!newName.trim()) return;
+    await fetchApi("/api/settings/meeting-rooms", { method: "POST", body: JSON.stringify({ name: newName, capacity: parseInt(newCap) || 10 }) });
+    await mutate();
+    setNewName(""); setNewCap("10");
+  };
+
+  const updateRoom = async (id: string) => {
+    await fetchApi("/api/settings/meeting-rooms", { method: "PUT", body: JSON.stringify({ id, name: editName, capacity: parseInt(editCap) || 10 }) });
+    await mutate();
+    setEditId(null);
+  };
+
+  const deleteRoom = async (id: string) => {
+    if (!confirm("ยืนยันลบห้องประชุม?")) return;
+    await fetchApi(`/api/settings/meeting-rooms?id=${id}`, { method: "DELETE" });
+    await mutate();
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-tu-text-secondary">จัดการห้องประชุมที่ใช้ใน Book Meeting ทั้งหมด {rooms.length} ห้อง</p>
+      <div className="flex gap-2">
+        <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="ชื่อห้อง..." className="rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm flex-1 outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" />
+        <input type="number" value={newCap} onChange={e => setNewCap(e.target.value)} min={1} className="rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm w-20 outline-none focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20" />
+        <button onClick={addRoom} className="rounded-[--radius-btn] bg-tu-primary px-3 py-2 text-xs font-medium text-white hover:bg-tu-primary-hover"><Plus size={14} />เพิ่ม</button>
+      </div>
+      <div className="space-y-2">
+        {rooms.map(room => (
+          <div key={room.id} className="flex items-center gap-3 p-3 rounded-lg border border-tu-border bg-tu-bg">
+            {editId === room.id ? (
+              <>
+                <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="rounded-[--radius-input] border border-tu-border px-2 py-1 text-sm flex-1 outline-none" />
+                <input type="number" value={editCap} onChange={e => setEditCap(e.target.value)} className="rounded-[--radius-input] border border-tu-border px-2 py-1 text-sm w-16 outline-none" />
+                <button onClick={() => updateRoom(room.id)} className="text-xs text-tu-success hover:underline">บันทึก</button>
+                <button onClick={() => setEditId(null)} className="text-xs text-tu-text-muted hover:underline">ยกเลิก</button>
+              </>
+            ) : (
+              <>
+                <Building2 size={16} className="text-tu-text-muted shrink-0" />
+                <span className="text-sm text-tu-text-primary flex-1">{room.name}</span>
+                <span className="text-xs text-tu-text-muted">{room.capacity} คน</span>
+                <button onClick={() => { setEditId(room.id); setEditName(room.name); setEditCap(String(room.capacity)); }} className="text-xs text-tu-text-secondary hover:text-tu-primary">แก้ไข</button>
+                <button onClick={() => deleteRoom(room.id)} className="text-xs text-tu-error hover:underline">ลบ</button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ==============================================================================
+   App Status Tab
+   ============================================================================== */
+
+function AppStatusTab() {
+  const { data, mutate } = useSWR("/api/settings/app-status", swrFetcher);
+  const apps = (Array.isArray(data) ? data : []) as Array<{ id: string; name: string; status: string; category?: { name: string } }>;
+  const STATUS_OPTIONS = ["online", "offline", "maintenance"];
+
+  const updateStatus = async (id: string, status: string) => {
+    await fetchApi("/api/settings/app-status", { method: "PUT", body: JSON.stringify({ id, status }) });
+    await mutate();
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-tu-text-secondary">ปรับสถานะ Application ที่แสดงใน Application Hub</p>
+      <div className="space-y-2">
+        {apps.map(app => (
+          <div key={app.id} className="flex items-center gap-3 p-3 rounded-lg border border-tu-border bg-tu-bg">
+            <Monitor size={16} className="text-tu-text-muted shrink-0" />
+            <span className="text-sm text-tu-text-primary flex-1">{app.name}</span>
+            <span className="text-xs text-tu-text-muted">{app.category?.name || "-"}</span>
+            <select value={app.status} onChange={e => updateStatus(app.id, e.target.value)}
+              className="rounded-[--radius-input] border border-tu-border bg-tu-surface px-2 py-1 text-xs outline-none">
+              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === "online" ? "🟢 Online" : s === "offline" ? "🔴 Offline" : "🟡 Maintenance"}</option>)}
+            </select>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -232,23 +356,40 @@ function CategoriesTab({ annCats, projCats, onAnnsChange, onProjsChange }: {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useUrlState<TabId>("tab", "auth");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  const [authForm, setAuthForm] = useState<AuthSettings>(DEFAULT_AUTH);
-  const [ssoForm, setSsoForm] = useState<SsoSettings>(DEFAULT_SSO);
-  const [brandingForm, setBrandingForm] = useState<BrandingSettings>(DEFAULT_BRANDING);
-  const [storageForm, setStorageForm] = useState<StorageSettings>(DEFAULT_STORAGE);
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>(DEFAULT_API_KEYS);
+  const { data: settingsData, mutate } = useSWR("/api/settings", swrFetcher);
+  const settings = (settingsData || {}) as Record<string, Record<string, unknown>>;
 
-  const [savedState, setSavedState] = useState({
-    auth: DEFAULT_AUTH, sso: DEFAULT_SSO, branding: DEFAULT_BRANDING,
-    storage: DEFAULT_STORAGE, apiKeys: DEFAULT_API_KEYS,
-  });
+  const authForm = (settings.auth || {}) as AuthSettings;
+  const ssoForm = (settings.sso || {}) as SsoSettings;
+  const brandingForm = (settings.branding || DEFAULT_BRANDING) as BrandingSettings;
+  const storageForm = (settings.storage || { quota: "5", fileTypes: ["PDF","XLSX","PPTX","DOCX","PNG","JPG"] }) as StorageSettings;
 
-  const dirty = JSON.stringify({ auth: authForm, sso: ssoForm, branding: brandingForm, storage: storageForm, apiKeys }) !==
-                JSON.stringify(savedState);
+  const setAuthForm = (f: AuthSettings) => { if (settings.auth) settings.auth = f as unknown as Record<string, unknown>; };
+  const setSsoForm = (f: SsoSettings) => { if (settings.sso) settings.sso = f as unknown as Record<string, unknown>; };
+  const setBrandingForm = (f: BrandingSettings) => { if (settings.branding) settings.branding = f as unknown as Record<string, unknown>; };
+  const setStorageForm = (f: StorageSettings) => { if (settings.storage) settings.storage = f as unknown as Record<string, unknown>; };
 
-  const handleSave = () => {
-    setSavedState({ auth: authForm, sso: ssoForm, branding: brandingForm, storage: storageForm, apiKeys });
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => { setDirty(true); setSaved(false); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = {};
+      if (settings.auth) body.auth = settings.auth;
+      if (settings.sso) body.sso = settings.sso;
+      if (settings.branding) body.branding = settings.branding;
+      if (settings.storage) body.storage = settings.storage;
+      await fetchApi("/api/settings", { method: "PUT", body: JSON.stringify(body) });
+      await mutate();
+      setDirty(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) { console.error("[handleSave]", e); }
+    setSaving(false);
   };
 
   return (
@@ -260,7 +401,15 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <SaveBanner dirty={dirty} onSave={handleSave} />
+      {dirty && (
+        <div className="flex items-center justify-between bg-tu-secondary-soft border border-tu-secondary/30 rounded-[--radius-card] px-4 py-2.5 text-sm">
+          <span className="flex items-center gap-2 text-tu-text-primary"><AlertTriangle size={16} className="text-tu-secondary" />คุณยังไม่ได้บันทึกการเปลี่ยนแปลง</span>
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors disabled:opacity-50">
+            <Save size={16} />{saving ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}
+          </button>
+        </div>
+      )}
+      {saved && <div className="flex items-center gap-2 rounded-[--radius-card] bg-tu-success/10 border border-tu-success/30 px-4 py-2.5 text-sm text-tu-success"><CheckCircle size={16} />บันทึกสำเร็จ</div>}
 
       <div className="flex gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5 w-fit flex-wrap">
         {TABS.map(tab => (
@@ -271,12 +420,14 @@ export default function SettingsPage() {
       </div>
 
       <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-6 max-w-4xl">
-        {activeTab === "auth" && <AuthTab form={authForm} onChange={setAuthForm} />}
-        {activeTab === "sso" && <SsoTab form={ssoForm} onChange={setSsoForm} />}
-        {activeTab === "branding" && <BrandingTab form={brandingForm} onChange={setBrandingForm} />}
-        {activeTab === "storage" && <StorageTab form={storageForm} onChange={setStorageForm} />}
-        {activeTab === "api-keys" && <ApiKeysTab keys={apiKeys} onUpdate={setApiKeys} />}
-        {activeTab === "categories" && <CategoriesTab annCats={storageForm.annCats} projCats={storageForm.projCats} onAnnsChange={(cats) => setStorageForm({ ...storageForm, annCats: cats })} onProjsChange={(cats) => setStorageForm({ ...storageForm, projCats: cats })} />}
+        {activeTab === "auth" && <AuthTab form={authForm} onChange={(f) => { setAuthForm(f); markDirty(); }} />}
+        {activeTab === "sso" && <SsoTab form={ssoForm} onChange={(f) => { setSsoForm(f); markDirty(); }} />}
+        {activeTab === "branding" && <BrandingTab form={brandingForm} onChange={(f) => { setBrandingForm(f); markDirty(); }} />}
+        {activeTab === "storage" && <StorageSettingsTab form={storageForm} onChange={(f) => { setStorageForm(f); markDirty(); }} />}
+        {activeTab === "api-keys" && <ApiKeysTabWrapper />}
+        {activeTab === "categories" && <CategoriesTabWrapper />}
+        {activeTab === "rooms" && <MeetingRoomsTab />}
+        {activeTab === "app-status" && <AppStatusTab />}
       </div>
     </div>
   );

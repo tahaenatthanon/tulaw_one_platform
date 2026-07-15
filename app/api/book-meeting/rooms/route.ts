@@ -12,29 +12,37 @@ export async function GET() {
 
   try {
     const now = new Date();
-    const [rooms, activeBookings] = await Promise.all([
+    const [rooms, allActiveBookings] = await Promise.all([
       prisma.meetingRoom.findMany({
         where: { deletedAt: null },
         orderBy: { name: "asc" },
       }),
       prisma.roomBooking.findMany({
         where: {
-          status: "confirmed",
-          startTime: { lte: now },
+          status: { in: ["confirmed", "pending"] },
           endTime: { gt: now },
         },
-        select: { roomId: true },
+        select: { roomId: true, startTime: true },
       }),
     ]);
 
-    const inUseRoomIds = new Set(activeBookings.map((b) => b.roomId));
+    const inUseRoomIds = new Set<string>();
+    const bookedRoomIds = new Set<string>();
+
+    for (const b of allActiveBookings) {
+      if (b.startTime <= now) {
+        inUseRoomIds.add(b.roomId);
+      } else {
+        bookedRoomIds.add(b.roomId);
+      }
+    }
 
     const mapped = rooms.map((r) => ({
       id: r.id,
       name: r.name,
       location: "", // MeetingRoom has no location field yet
       capacity: r.capacity,
-      status: inUseRoomIds.has(r.id) ? "in-use" : "available",
+      status: inUseRoomIds.has(r.id) ? "in-use" : bookedRoomIds.has(r.id) ? "booked" : "available",
     }));
 
     return apiSuccess(mapped);

@@ -107,7 +107,7 @@ export function buildDocumentPoolWhere(
 
   // For personal pool, limit to own documents unless scope allows all
   if (requestedPool === "personal" && !scope.canAccessOtherPersonalPools) {
-    where.ownerId = scope.ownerUserId;
+    where.ownerUserId = scope.ownerUserId;
   }
 
   // For department pool, limit to own department unless scope allows all

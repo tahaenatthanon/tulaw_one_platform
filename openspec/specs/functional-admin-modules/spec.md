@@ -97,3 +97,37 @@ The Settings page SHALL persist all configuration changes to a backend API inste
 
 - **WHEN** an admin creates or revokes an API key
 - **THEN** the system SHALL persist the change via the API
+
+---
+
+### Requirement: System Configuration stores settings in database
+
+The system SHALL persist all configuration settings to the database.
+
+#### Scenario: Settings survive server restart
+
+- **WHEN** an admin updates settings and saves
+- **THEN** the system SHALL persist settings to the `SystemConfig` table
+- **AND** settings SHALL be available after server restart
+
+### Requirement: Branding changes apply system-wide via CSS variables
+
+#### Scenario: Primary color change affects all components
+
+- **WHEN** an admin changes the primary brand color
+- **THEN** all UI components using `--tu-primary` SHALL reflect the new color
+- **AND** the change SHALL persist across server restarts
+
+### Requirement: Meeting rooms can be managed from settings
+
+#### Scenario: Add meeting room
+
+- **WHEN** an admin creates a new meeting room with name and capacity
+- **THEN** the room SHALL appear in Book Meeting immediately
+
+### Requirement: Application status can be managed from settings
+
+#### Scenario: Set app to maintenance mode
+
+- **WHEN** an admin sets an application to "maintenance"
+- **THEN** the application icon in Application Hub SHALL show a maintenance badge

@@ -7,10 +7,10 @@
 
 :root {
   /* ─── Brand Tokens ─── */
-  --tu-primary:        #A31D1D;
-  --tu-primary-hover:  #8B1515;
-  --tu-primary-active: #731111;
-  --tu-primary-soft:   #FCEAEA;
+  --tu-primary: #A31D1D;
+  --tu-primary-hover: #850000;
+  --tu-primary-active: #710000;
+  --tu-primary-soft: #df5959;
 
   --tu-secondary:        #FDB813;
   --tu-secondary-hover:  #E5A800;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import {
@@ -13,6 +13,7 @@ import { useUrlState } from "@/hooks/use-url-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useHasPermission } from "@/hooks/use-permission";
+import { ROLE_LEVELS, type RoleCode } from "@/lib/permissions";
 
 /* ==============================================================================
    Types
@@ -20,9 +21,10 @@ import { useHasPermission } from "@/hooks/use-permission";
 
 type PoolId = "central" | "department" | "personal";
 
-interface Document {
+interface DocumentItem {
   id: string; title: string; pool: PoolId; department: string;
   uploadedBy: string; date: string; size: string; type: string;
+  fileSize?: number; ownerUserId?: string;
 }
 
 /* ==============================================================================
@@ -38,28 +40,15 @@ const POOL_TABS: { id: PoolId | null; label: string; icon: typeof FolderOpen }[]
   { id: "personal", label: "Personal Pool", icon: User },
 ];
 
-const MOCK_DOCS: Document[] = [
-  { id: "1", title: "ระเบียบการลงทะเบียนเรียน 2568", pool: "central", department: "ฝ่ายวิชาการ", uploadedBy: "สมชาย ใจดี", date: "2025-07-05 14:30", size: "2.4 MB", type: "PDF" },
-  { id: "2", title: "คู่มืออาจารย์ที่ปรึกษา", pool: "department", department: "ฝ่ายวิชาการ", uploadedBy: "สมศรี รักเรียน", date: "2025-07-03 09:15", size: "1.1 MB", type: "DOCX" },
-  { id: "3", title: "รายงานการประชุม มิ.ย. 68", pool: "department", department: "สำนักงานคณะ", uploadedBy: "วิชัย วงศ์วิเศษ", date: "2025-07-01 16:00", size: "0.8 MB", type: "XLSX" },
-  { id: "4", title: "บันทึกส่วนตัว", pool: "personal", department: "-", uploadedBy: "นภา มั่นคง", date: "2025-06-28 11:20", size: "0.3 MB", type: "PDF" },
-  { id: "5", title: "แผนปฏิบัติการประจำปี 2568", pool: "central", department: "สำนักงานคณะ", uploadedBy: "ธนา รักษาดี", date: "2025-06-20 08:45", size: "3.2 MB", type: "PPTX" },
-  { id: "6", title: "Template หนังสือราชการ", pool: "central", department: "สำนักงานคณะ", uploadedBy: "พิมใจ นิติศาสตร์", date: "2025-06-18 13:10", size: "0.5 MB", type: "DOCX" },
-  { id: "7", title: "รายงานวิจัยกฎหมายสิ่งแวดล้อม", pool: "central", department: "งานวิจัย", uploadedBy: "สมชาย ใจดี", date: "2025-06-15 10:00", size: "4.1 MB", type: "PDF" },
-  { id: "8", title: "บันทึกข้อความประชุมวิชาการ", pool: "personal", department: "-", uploadedBy: "นภา มั่นคง", date: "2025-06-12 15:30", size: "1.8 MB", type: "PNG" },
-  { id: "9", title: "ประเมินผลการสอน 1-2568", pool: "department", department: "ฝ่ายวิชาการ", uploadedBy: "สมศรี รักเรียน", date: "2025-06-10 09:00", size: "0.9 MB", type: "XLSX" },
-  { id: "10", title: "ข้อบังคับคณะนิติศาสตร์ 2568", pool: "central", department: "สำนักงานคณะ", uploadedBy: "วิชัย วงศ์วิเศษ", date: "2025-06-05 14:00", size: "1.5 MB", type: "PDF" },
-  { id: "11", title: "สัญญาจ้างอาจารย์พิเศษ", pool: "department", department: "สำนักงานคณะ", uploadedBy: "ธนา รักษาดี", date: "2025-06-01 11:00", size: "0.6 MB", type: "DOCX" },
-  { id: "12", title: "รูปถ่ายกิจกรรมรับน้อง", pool: "personal", department: "-", uploadedBy: "นภา มั่นคง", date: "2025-05-28 16:45", size: "3.5 MB", type: "JPG" },
-];
-
 /* ==============================================================================
    Helpers
    ============================================================================== */
 
-function getAvailablePools(roles: string[]): PoolId[] {
-  const isAdmin = roles.includes("super_admin") || roles.includes("system_admin") || roles.includes("dept_admin");
-  return isAdmin ? ["central", "department", "personal"] : ["central", "personal"];
+function getAvailablePools(roles: RoleCode[], _departmentId: number | null): PoolId[] {
+  const maxLevel = Math.max(0, ...roles.map((r) => ROLE_LEVELS[r] ?? 0));
+  if (maxLevel >= 70) return ["central", "department", "personal"];
+  if (maxLevel >= 50) return ["central", "department", "personal"];
+  return ["central", "personal"];
 }
 
 function formatDate(dateStr: string): string {
@@ -78,25 +67,29 @@ export default function DocumentsPage() {
   const [poolParam, setPoolParam] = useUrlState("pool", "");
   const pool: PoolId | null = (POOL_TABS.some(t => t.id === poolParam) ? poolParam : null) as PoolId | null;
   const setPool = (p: PoolId | null) => setPoolParam(p ?? "");
+  const [uploadModal, setUploadModal] = useState(false);
+  const [uploadPool, setUploadPool] = useState("personal");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch from API, fallback to mock
-  const { data: apiDocs, isLoading, mutate } = useSWR("/api/documents", swrFetcher<Document[]>);
-  const docs: Document[] = (apiDocs as unknown as Document[])?.length ? (apiDocs as unknown as Document[]) : MOCK_DOCS;
+  const { data: apiDocs, isLoading, mutate } = useSWR("/api/documents", swrFetcher, { refreshInterval: 15000 });
+  const docs: DocumentItem[] = Array.isArray(apiDocs) ? (apiDocs as DocumentItem[]) : [];
   const canUpload = useHasPermission("DOCUMENTS_UPLOAD");
   const canDelete = useHasPermission("DOCUMENTS_DELETE");
 
   const { data: session } = useSession();
-  const roles: string[] = (session?.user as { roles?: string[] })?.roles ?? ["user"];
-  const availablePools = getAvailablePools(roles);
+  const roles: RoleCode[] = (session?.user as { roles?: RoleCode[] })?.roles ?? (["user"] as RoleCode[]);
+  const userId = (session?.user as { id?: string })?.id ?? "";
+  const departmentId = (session?.user as { departmentId?: number | null })?.departmentId ?? null;
+  const maxLevel = Math.max(0, ...roles.map((r) => ROLE_LEVELS[r] ?? 0));
+  const availablePools = getAvailablePools(roles, departmentId);
   const displayTabs = POOL_TABS.filter(t => t.id === null || availablePools.includes(t.id));
 
-  // Calculate storage
   const handleDelete = async (id: string, title: string, docPool: PoolId) => {
-    // User (not admin) can only delete from personal pool
-    const canDel = useHasPermission("DOCUMENTS_DELETE");
-    if (canDel && docPool !== "personal" && !roles.some(r => ["super_admin", "system_admin", "dept_admin"].includes(r))) {
+    if (maxLevel < 50 && docPool !== "personal") {
       alert("คุณสามารถลบได้เฉพาะเอกสารใน Personal Pool เท่านั้น");
       return;
     }
@@ -104,43 +97,46 @@ export default function DocumentsPage() {
     setDeleting(id);
     try {
       await fetchApi(`/api/documents?id=${id}`, { method: "DELETE" });
-      mutate();
+      await mutate();
     } catch { /* fallback */ }
     setDeleting(null);
   };
 
+  const handleDownload = async (id: string) => {
+    window.open(`/api/documents/download?id=${id}`, "_blank");
+  };
+
   const totalSize = docs.reduce((s, d) => {
-    const mb = parseFloat(d.size);
-    return s + (isNaN(mb) ? 0 : mb);
+    const bytes = d.fileSize || 0;
+    return s + bytes;
   }, 0);
-  const usedGB = totalSize / 1024;
+  const usedGB = totalSize / (1024 * 1024 * 1024);
   const pct = Math.min(100, Math.round((usedGB / QUOTA_GB) * 100));
 
-  const filtered = docs.filter(d =>
+  const filtered = docs.filter((d: DocumentItem) =>
     d.title.toLowerCase().includes(search.toLowerCase()) &&
     (!pool || d.pool === pool)
   );
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleUploadSubmit = async () => {
+    if (!uploadFile) return;
     const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/png", "image/jpeg"];
-    if (!allowed.includes(file.type)) { alert("เฉพาะ PDF, XLSX, PPTX, DOCX, PNG, JPG เท่านั้น"); return; }
+    if (!allowed.includes(uploadFile.type)) { alert("เฉพาะ PDF, XLSX, PPTX, DOCX, PNG, JPG เท่านั้น"); return; }
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("title", file.name);
-      formData.append("poolType", pool ?? "personal");
+      formData.append("file", uploadFile);
+      formData.append("title", uploadFile.name);
+      formData.append("poolType", maxLevel >= 50 ? uploadPool : "personal");
       await fetch("/api/documents", { method: "POST", body: formData });
-      mutate();
-    } catch { /* fallback */ }
+      await mutate();
+    } catch (e) {
+      console.error("[handleUploadSubmit]", e);
+    }
     setUploading(false);
-    alert(`อัปโหลด "${file.name}" สำเร็จ`);
-    e.target.value = "";
+    setUploadModal(false);
+    setUploadFile(null);
   };
-
-  const canAccessPool = (docPool: PoolId) => availablePools.includes(docPool);
 
   return (
     <div className="p-6 space-y-6">
@@ -151,10 +147,9 @@ export default function DocumentsPage() {
           <p className="text-tu-text-muted text-sm mt-1">ระบบจัดการเอกสาร 3 ระดับ · รองรับ PDF, XLSX, PPTX, DOCX, PNG, JPG</p>
         </div>
         {canUpload && (
-          <label className="inline-flex items-center gap-2 rounded-[--radius-btn] bg-tu-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors cursor-pointer">
-            <Upload size={18} />{uploading ? "กำลังอัปโหลด..." : "อัปโหลดเอกสาร"}
-            <input type="file" accept=".pdf,.xlsx,.pptx,.docx,.png,.jpg" onChange={handleUpload} className="hidden" />
-          </label>
+          <button onClick={() => { setUploadModal(true); setUploadFile(null); }} className="inline-flex items-center gap-2 rounded-[--radius-btn] bg-tu-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors">
+            <Upload size={18} />อัปโหลดเอกสาร
+          </button>
         )}
       </div>
 
@@ -165,7 +160,7 @@ export default function DocumentsPage() {
           <div className="flex-1">
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-medium text-tu-text-primary">พื้นที่เก็บข้อมูล</span>
-              <span className="text-xs text-tu-text-muted">{usedGB.toFixed(1)} GB / {QUOTA_GB} GB</span>
+              <span className="text-xs text-tu-text-muted">{usedGB.toFixed(2)} GB / {QUOTA_GB} GB</span>
             </div>
             <div className="h-3 rounded-full bg-tu-bg overflow-hidden">
               <div className={cn("h-full rounded-full transition-all", pct > 80 ? "bg-tu-error" : pct > 50 ? "bg-tu-secondary" : "bg-tu-primary")} style={{ width: `${pct}%` }} />
@@ -173,7 +168,6 @@ export default function DocumentsPage() {
           </div>
           <Badge variant={pct > 80 ? "destructive" : "success"}>{pct}%</Badge>
         </div>
-        {/* Audit trail note */}
         <p className="text-[10px] text-tu-text-muted text-right">
           🛡 Audit Trail: ทุกการเข้าถึงและแก้ไขเอกสารถูกบันทึก — {filtered.length} รายการที่คุณเข้าถึงได้
         </p>
@@ -207,7 +201,9 @@ export default function DocumentsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-tu-border">
-            {filtered.length === 0 ? (
+            {isLoading ? (
+              <tr><td colSpan={6} className="px-4 py-12 text-center text-tu-text-muted"><p>กำลังโหลด...</p></td></tr>
+            ) : filtered.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-12 text-center text-tu-text-muted"><FileText size={40} className="mx-auto mb-3 opacity-20" /><p>ไม่พบเอกสาร</p></td></tr>
             ) : filtered.map((doc) => (
               <tr key={doc.id} className="hover:bg-tu-surface-hover transition-colors">
@@ -224,8 +220,8 @@ export default function DocumentsPage() {
                 <td className="px-4 py-3 text-xs text-tu-text-muted">{formatDate(doc.date)}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" title="ดาวน์โหลด"><Download size={16} /></Button>
-                    {canDelete && (
+                    <Button variant="ghost" size="icon" title="ดาวน์โหลด" onClick={() => handleDownload(doc.id)}><Download size={16} /></Button>
+                    {canDelete && doc.ownerUserId === userId && (
                       <Button variant="ghost" size="icon" title="ลบ" onClick={() => handleDelete(doc.id, doc.title, doc.pool)} disabled={deleting === doc.id}>
                         <Trash2 size={16} className={deleting === doc.id ? "animate-spin text-tu-text-muted" : "text-tu-error hover:text-tu-error/80"} />
                       </Button>
@@ -237,6 +233,81 @@ export default function DocumentsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Upload Modal */}
+      {uploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!uploading) { setUploadModal(false); setUploadFile(null); } }}>
+          <div className="bg-tu-surface rounded-[--radius-dialog] border border-tu-border shadow-xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-tu-text-primary mb-5">อัปโหลดเอกสาร</h2>
+
+            {/* Pool selector */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">เลือก Pool</label>
+              <select
+                value={uploadPool}
+                onChange={e => setUploadPool(e.target.value)}
+                disabled={maxLevel < 50}
+                className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 outline-none"
+              >
+                {availablePools.map(p => (
+                  <option key={p} value={p}>{p === "central" ? "Central Pool" : p === "department" ? "Department Pool" : "Personal Pool"}</option>
+                ))}
+              </select>
+              {maxLevel < 50 && <p className="text-[10px] text-tu-text-muted mt-1">ผู้ใช้ทั่วไปอัปโหลดได้เฉพาะ Personal Pool</p>}
+            </div>
+
+            {/* Drag & drop area */}
+            <div
+              className={cn(
+                "border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors",
+                dragOver ? "border-tu-primary bg-tu-primary-soft" : "border-tu-border hover:border-tu-primary/50 hover:bg-tu-bg/50",
+                uploadFile ? "border-tu-success bg-tu-success/5" : ""
+              )}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => {
+                e.preventDefault();
+                setDragOver(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) setUploadFile(file);
+              }}
+            >
+              {uploadFile ? (
+                <div className="flex flex-col items-center gap-2">
+                  <FileText size={32} className="text-tu-success" />
+                  <span className="text-sm font-medium text-tu-text-primary">{uploadFile.name}</span>
+                  <span className="text-xs text-tu-text-muted">{(uploadFile.size / (1024 * 1024)).toFixed(1)} MB</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Upload size={32} className="text-tu-text-muted" />
+                  <span className="text-sm text-tu-text-secondary">คลิกหรือลากไฟล์มาวางที่นี่</span>
+                  <span className="text-xs text-tu-text-muted">PDF, XLSX, PPTX, DOCX, PNG, JPG</span>
+                </div>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.xlsx,.pptx,.docx,.png,.jpg"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) setUploadFile(f); }}
+            />
+
+            <div className="flex gap-2 mt-5 justify-end">
+              <button onClick={() => { setUploadModal(false); setUploadFile(null); }} disabled={uploading}
+                className="rounded-[--radius-btn] border border-tu-border px-4 py-2 text-sm font-medium text-tu-text-secondary hover:bg-tu-surface-hover transition-colors">
+                ยกเลิก
+              </button>
+              <button onClick={handleUploadSubmit} disabled={!uploadFile || uploading}
+                className="rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                {uploading ? "กำลังอัปโหลด..." : "อัปโหลด"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

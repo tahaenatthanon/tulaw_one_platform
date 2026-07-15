@@ -237,9 +237,9 @@ async function main(): Promise<void> {
   const roomB = await getOrCreateRoom("ห้องประชุมใหญ่ ชั้น 3", 60);
 
   const bookingSeed: Array<{ title: string; roomId: string; userId: string; start: Date; attendee: number }> = [
-    { title: "ประชุมทีม IT รายสัปดาห์", roomId: roomA.id, userId: createdUserIds[0], start: dayThisWeek(0), attendee: 8 },
-    { title: "ประชุมฝ่ายวิชาการ", roomId: roomA.id, userId: createdUserIds[3], start: dayThisWeek(2), attendee: 12 },
-    { title: "อบรมบุคลากร", roomId: roomB.id, userId: createdUserIds[6], start: dayThisWeek(4), attendee: 30 },
+    { title: "ประชุมทีม IT รายสัปดาห์", roomId: roomA.id, userId: createdUserIds[0], start: monthsAgo(0, 10), attendee: 8 },
+    { title: "ประชุมฝ่ายวิชาการ", roomId: roomA.id, userId: createdUserIds[3], start: monthsAgo(0, 12), attendee: 12 },
+    { title: "อบรมบุคลากร", roomId: roomB.id, userId: createdUserIds[6], start: monthsAgo(0, 14), attendee: 30 },
     { title: "สัมมนาวิชาการ", roomId: roomB.id, userId: createdUserIds[4], start: monthsAgo(1, 10), attendee: 45 },
     { title: "ประชุมคณะกรรมการ", roomId: roomB.id, userId: createdUserIds[1], start: monthsAgo(2, 12), attendee: 25 },
     { title: "พบนักศึกษา", roomId: roomA.id, userId: createdUserIds[5], start: monthsAgo(3, 8), attendee: 15 },

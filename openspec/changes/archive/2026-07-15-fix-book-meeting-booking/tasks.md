@@ -27,9 +27,9 @@
 
 ## 5. Verification
 
-- [ ] 5.1 Verify rooms load from API and show correct status
-- [ ] 5.2 Verify creating a booking succeeds and appears in all tabs
-- [ ] 5.3 Verify confirming a pending booking moves it to confirmed
-- [ ] 5.4 Verify cancelling a booking sets status to cancelled and removes from active tabs
-- [ ] 5.5 Verify "my-bookings" tab shows only own bookings
-- [ ] 5.6 Verify schedule tab updates after booking changes
+- [x] 5.1 Verify rooms load from API and show correct status
+- [x] 5.2 Verify creating a booking succeeds and appears in all tabs
+- [x] 5.3 Verify confirming a pending booking moves it to confirmed
+- [x] 5.4 Verify cancelling a booking sets status to cancelled and removes from active tabs
+- [x] 5.5 Verify "my-bookings" tab shows only own bookings
+- [x] 5.6 Verify schedule tab updates after booking changes
