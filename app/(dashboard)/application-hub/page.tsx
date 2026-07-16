@@ -65,12 +65,14 @@ export default function ApplicationHubPage() {
     status: (statusMap.get(a.name) as AppStatus) || "online",
   }));
 
-  const visibleApps: AppWithStatus[] = apps.filter((a: AppGroup) => canView[a.id as keyof typeof canView]);
-  const filtered: AppWithStatus[] = visibleApps.filter((a: AppWithStatus) =>
-    search === "" || a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase())
-  );
-  const pinnedApps = filtered.filter((a: AppWithStatus) => pinnedIds.has(a.id));
-  const unpinnedApps = filtered.filter((a: AppWithStatus) => !pinnedIds.has(a.id));
+  const visibleApps: AppWithStatus[] = apps.filter((a) => canView[a.id as keyof typeof canView]);
+  const filtered: AppWithStatus[] = search === ""
+    ? visibleApps
+    : visibleApps.filter((a) =>
+        a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase())
+      );
+  const pinnedApps: AppWithStatus[] = filtered.filter((a) => pinnedIds.has(a.id));
+  const unpinnedApps: AppWithStatus[] = filtered.filter((a) => !pinnedIds.has(a.id));
   if (!canView) return null; // satisfy lint for hook order
 
   return (
