@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useHasPermission } from "@/hooks/use-permission";
 import { UserActionBar } from "../_components/user-action-bar";
@@ -50,6 +50,14 @@ interface Department {
    ============================================================================== */
 
 export default function UserManagementPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-tu-text-muted">Loading...</div>}>
+      <UserManagementContent />
+    </Suspense>
+  );
+}
+
+function UserManagementContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 

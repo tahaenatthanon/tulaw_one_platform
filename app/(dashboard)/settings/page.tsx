@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import useSWR from "swr";
 import {
   ShieldCheck, Key, Palette, HardDrive, Settings,
@@ -366,6 +366,14 @@ function CategoriesTab({ annCats, projCats, onAnnsChange, onProjsChange }: {
    ============================================================================== */
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-tu-text-muted">Loading...</div>}>
+      <SettingsContent />
+    </Suspense>
+  );
+}
+
+function SettingsContent() {
   const [activeTab, setActiveTab] = useUrlState<TabId>("tab", "auth");
 
   const { data: settingsData, mutate } = useSWR("/api/settings", swrFetcher);

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, Suspense } from "react";
 import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
 import {
@@ -30,7 +30,7 @@ const appGroups: AppGroup[] = [
   { id: "hr", name: "งานบุคคล", description: "ระบบบริหารทรัพยากรบุคคล", icon: Users2, userCount: 28 },
 ];
 
-export default function ApplicationHubPage() {
+function ApplicationHubContent() {
   const [search, setSearch] = useUrlState("search", "");
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set<string>();
@@ -127,6 +127,31 @@ export default function ApplicationHubPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ApplicationHubPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 space-y-6 animate-pulse">
+          <div className="h-8 w-64 bg-tu-surface rounded" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-20 bg-tu-surface rounded-[--radius-card] border border-tu-border" />
+            ))}
+          </div>
+          <div className="h-10 w-full max-w-sm bg-tu-surface rounded-[--radius-input] border border-tu-border" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-48 bg-tu-surface rounded-[--radius-card] border border-tu-border" />
+            ))}
+          </div>
+        </div>
+      }
+    >
+      <ApplicationHubContent />
+    </Suspense>
   );
 }
 

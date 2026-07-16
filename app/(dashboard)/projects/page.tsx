@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import useSWR from "swr";
 import { swrFetcher, fetchApi } from "@/lib/fetcher";
 import { useUrlState } from "@/hooks/use-url-state";
@@ -321,6 +321,14 @@ function DroppableColumn({ col, projects, onEdit, onApproveClick, onRejectClick,
    ============================================================================== */
 
 export default function ProjectsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-tu-text-muted">Loading...</div>}>
+      <ProjectsContent />
+    </Suspense>
+  );
+}
+
+function ProjectsContent() {
   const { data: apiProjects, isLoading, mutate } = useSWR("/api/projects", swrFetcher);
   const projects: ProjectCard[] = Array.isArray(apiProjects) ? apiProjects : [];
 

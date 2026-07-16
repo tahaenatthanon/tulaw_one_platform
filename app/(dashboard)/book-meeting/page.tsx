@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import {
@@ -438,6 +438,14 @@ function BookingsList({ bookings, rooms, type, currentUserId, canApprove, onConf
    ============================================================================== */
 
 export default function BookMeetingPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-tu-text-muted">Loading...</div>}>
+      <BookMeetingContent />
+    </Suspense>
+  );
+}
+
+function BookMeetingContent() {
   const [activeTab, setActiveTab] = useUrlState<TabId>("tab", "rooms");
   const [search, setSearch] = useUrlState<string>("search", "");
   const [modalOpen, setModalOpen] = useState(false);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, Suspense } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import {
@@ -63,6 +63,14 @@ function formatDate(dateStr: string): string {
    ============================================================================== */
 
 export default function DocumentsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-tu-text-muted">Loading...</div>}>
+      <DocumentsContent />
+    </Suspense>
+  );
+}
+
+function DocumentsContent() {
   const [search, setSearch] = useUrlState<string>("search", "");
   const [poolParam, setPoolParam] = useUrlState("pool", "");
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useUrlState } from "@/hooks/use-url-state";
@@ -863,6 +863,14 @@ function ContactsTab({ departments }: { departments: Department[] }) {
    ============================================================================== */
 
 export default function IntranetPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-tu-text-muted">Loading...</div>}>
+      <IntranetContent />
+    </Suspense>
+  );
+}
+
+function IntranetContent() {
   const [activeTab, setActiveTab] = useUrlState<TabId>("tab", "announcements");
   const { data: session } = useSession();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? "";
