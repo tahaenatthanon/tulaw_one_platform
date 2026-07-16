@@ -173,7 +173,7 @@ function StorageSettingsTab({ form, onChange }: { form: StorageSettings; onChang
 function ApiKeysTabWrapper() {
   const { data, mutate } = useSWR("/api/settings", swrFetcher);
   const settings = (data || {}) as Record<string, Record<string, unknown>>;
-  const keys = (settings.apiKeys || []) as ApiKey[];
+  const keys = (settings.apiKeys || []) as unknown as ApiKey[];
   return <ApiKeysTab keys={keys} onUpdate={(k) => {}} />;
 }
 

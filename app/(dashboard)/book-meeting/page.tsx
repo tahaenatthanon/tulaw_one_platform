@@ -439,7 +439,7 @@ function BookingsList({ bookings, rooms, type, currentUserId, canApprove, onConf
 
 export default function BookMeetingPage() {
   const [activeTab, setActiveTab] = useUrlState<TabId>("tab", "rooms");
-  const [search, setSearch] = useUrlState("search", "");
+  const [search, setSearch] = useUrlState<string>("search", "");
   const [modalOpen, setModalOpen] = useState(false);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);

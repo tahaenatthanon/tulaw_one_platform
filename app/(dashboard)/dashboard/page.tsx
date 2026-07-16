@@ -124,7 +124,7 @@ function PersonnelBreakdown({ stats, proportion }: { stats: OrgStats; proportion
             <Tooltip content={<ChartTooltip valueFormatter={(v) => v.toLocaleString("th-TH")} />} />
             <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} animationDuration={400} animationEasing="ease">
               {proportion.map((_, i) => (<Cell key={i} fill={colors[i % colors.length]} />))}
-              <LabelList dataKey="value" position="right" style={{ fontSize: 11, fill: "var(--tu-text-primary)" }} formatter={(v: number) => v.toLocaleString("th-TH")} />
+              <LabelList dataKey="value" position="right" style={{ fontSize: 11, fill: "var(--tu-text-primary)" }} formatter={(v: unknown) => Number(v).toLocaleString("th-TH")} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -265,7 +265,7 @@ function ProportionDonut({ data }: { data: ProportDept[] }) {
           nameKey="name"
           animationDuration={400}
           animationEasing="ease"
-          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+          label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
           labelLine={{ stroke: "var(--tu-text-muted)", strokeWidth: 1 }}
         >
           {data.map((_, i) => (<Cell key={i} fill={colors[i % colors.length]} />))}

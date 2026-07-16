@@ -29,7 +29,7 @@ function generateBackupCodes(): string[] {
 }
 
 function getOtpAuthUri(secret: string, email: string): string {
-  return generateURI({ type: "totp", label: email, issuer: OTPAUTH_LABEL, secret });
+  return generateURI({ label: email, issuer: OTPAUTH_LABEL, secret });
 }
 
 async function auditMfa(userId: string, action: string, targetUserId?: string) {

@@ -31,9 +31,9 @@ export async function GET(req: NextRequest) {
         where,
         skip,
         take: limit,
-        orderBy: { transactionDate: "desc" },
+        orderBy: { transDate: "desc" },
         include: {
-          budget: { include: { department: { select: { name: true } } } },
+          budget: true,
         },
       }),
       prisma.erpBudgetTransaction.count({ where }),
@@ -41,20 +41,20 @@ export async function GET(req: NextRequest) {
 
     const mapped = data.map((tx) => ({
       id: tx.id,
-      accountCode: tx.budget?.code ?? "-",
+      accountCode: (tx.budget as { code?: string } | null)?.code ?? "-",
       description: tx.description,
       debit: tx.type === "debit" ? tx.amount : 0,
       credit: tx.type === "credit" ? tx.amount : 0,
       type: tx.type,
-      department: tx.budget?.department?.name ?? "-",
-      transactionDate: tx.transactionDate.toISOString(),
+      department: "-",
+      transactionDate: tx.transDate.toISOString(),
       createdBy: tx.createdBy,
     }));
 
     const totals = mapped.reduce(
       (acc, tx) => ({
-        totalDebit: acc.totalDebit + tx.debit,
-        totalCredit: acc.totalCredit + tx.credit,
+        totalDebit: acc.totalDebit + Number(tx.debit),
+        totalCredit: acc.totalCredit + Number(tx.credit),
       }),
       { totalDebit: 0, totalCredit: 0 }
     );
@@ -82,11 +82,11 @@ export async function POST(req: NextRequest) {
 
     const entry = await prisma.erpBudgetTransaction.create({
       data: {
-        budgetId: Number(budgetId),
+        budgetId: String(budgetId),
         description,
         amount: Number(amount),
         type,
-        transactionDate: new Date(),
+        transDate: new Date(),
         createdBy: session.user.id,
       },
     });

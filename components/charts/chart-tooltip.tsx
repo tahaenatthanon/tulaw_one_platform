@@ -1,12 +1,12 @@
 "use client";
 
-import type { TooltipProps } from "recharts";
-import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
+import type { ReactNode } from "react";
 
-interface ChartTooltipProps extends TooltipProps<ValueType, NameType> {
-  /** Optional label formatter (e.g., add units) */
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number | string; color?: string; dataKey?: string | number }>;
+  label?: ReactNode;
   labelFormatter?: (label: string) => string;
-  /** Optional value formatter */
   valueFormatter?: (value: number, name: string) => string;
 }
 
@@ -49,7 +49,13 @@ export function SimpleTooltip({
   label,
   labelFormatter,
   valueFormatter,
-}: ChartTooltipProps) {
+}: {
+  active?: boolean;
+  payload?: Array<{ value?: number | string; name?: string }>;
+  label?: ReactNode;
+  labelFormatter?: (label: string) => string;
+  valueFormatter?: (value: number, name: string) => string;
+}) {
   if (!active || !payload?.length) return null;
 
   return (

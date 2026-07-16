@@ -66,11 +66,12 @@ export default function ApplicationHubPage() {
   }));
 
   const visibleApps: AppWithStatus[] = apps.filter((a) => canView[a.id as keyof typeof canView]);
+  const searchLower = search.toLowerCase();
   const filtered: AppWithStatus[] = search === ""
     ? visibleApps
-    : visibleApps.filter((a) =>
-        a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase())
-      );
+    : visibleApps.filter(function (a) {
+        return a.name.toLowerCase().includes(searchLower) || a.description.toLowerCase().includes(searchLower);
+      });
   const pinnedApps: AppWithStatus[] = filtered.filter((a) => pinnedIds.has(a.id));
   const unpinnedApps: AppWithStatus[] = filtered.filter((a) => !pinnedIds.has(a.id));
   if (!canView) return null; // satisfy lint for hook order

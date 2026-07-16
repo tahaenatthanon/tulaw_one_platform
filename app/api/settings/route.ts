@@ -1,6 +1,8 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { join } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-utils";

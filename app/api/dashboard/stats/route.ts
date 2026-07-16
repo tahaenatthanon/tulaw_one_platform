@@ -114,7 +114,7 @@ export async function GET(_req: NextRequest) {
     };
 
     const latestAnnouncements = numArr(latestAnnouncementRows).length > 0
-      ? numArr(latestAnnouncementRows).map((a: { id: string; title: string; category?: { name: string }; publishDate?: Date; createdAt: Date; status: string }) => ({
+      ? numArr(latestAnnouncementRows).map((a: { id: string; title: string; category?: { name: string }; publishDate?: Date | null; createdAt: Date; status: string }) => ({
           id: a.id, title: a.title,
           category: a.category?.name ?? "ทั่วไป",
           publishDate: a.publishDate ? a.publishDate.toISOString() : a.createdAt.toISOString(),

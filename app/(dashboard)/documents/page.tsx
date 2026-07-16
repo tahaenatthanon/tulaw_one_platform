@@ -63,10 +63,11 @@ function formatDate(dateStr: string): string {
    ============================================================================== */
 
 export default function DocumentsPage() {
-  const [search, setSearch] = useUrlState("search", "");
+  const [search, setSearch] = useUrlState<string>("search", "");
   const [poolParam, setPoolParam] = useUrlState("pool", "");
-  const pool: PoolId | null = (POOL_TABS.some(t => t.id === poolParam) ? poolParam : null) as PoolId | null;
-  const setPool = (p: PoolId | null) => setPoolParam(p ?? "");
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  const pool: PoolId | null = (POOL_TABS.some(t => t.id === (poolParam as string)) ? (poolParam as PoolId) : null);
+  const setPool = (p: PoolId | null) => setPoolParam(p ?? "" as string);
   const [uploadModal, setUploadModal] = useState(false);
   const [uploadPool, setUploadPool] = useState("personal");
   const [uploadFile, setUploadFile] = useState<File | null>(null);

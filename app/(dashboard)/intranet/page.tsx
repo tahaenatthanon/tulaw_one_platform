@@ -496,7 +496,7 @@ function DetailModal({ ann, open, onClose, categories }: { ann: Announcement | n
    ============================================================================== */
 
 function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, currentUserId, onMutate, categories, subscribeCats }: { announcements: Announcement[]; canCreate: boolean; canEdit: boolean; canDelete: boolean; currentUserId: string; onMutate: () => void; categories: CategoryDef[]; subscribeCats: CategoryDef[] }) {
-  const [selectedFilter, setSelectedFilter] = useUrlState("filter", "ทั้งหมด");
+  const [selectedFilter, setSelectedFilter] = useUrlState<string>("filter", "ทั้งหมด");
   const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
   const [subLoading, setSubLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);

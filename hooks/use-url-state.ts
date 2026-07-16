@@ -11,7 +11,7 @@ import { useCallback } from "react";
 export function useUrlState<T extends string>(
   key: string,
   defaultValue: T
-): [T, (val: T) => void] {
+): [T, (val: string) => void] {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -34,7 +34,7 @@ export function useUrlState<T extends string>(
     [router, searchParams, pathname, key, defaultValue]
   );
 
-  return [value, setValue];
+  return [value, setValue as (val: string) => void];
 }
 
 /**

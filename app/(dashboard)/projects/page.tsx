@@ -25,7 +25,7 @@ import { useHasPermission } from "@/hooks/use-permission";
 type ColumnId = "planning" | "in_progress" | "pending_approval" | "completed";
 type ProjectType = "วิชาการ" | "หลักสูตร" | "สัมมนา" | "IT" | "งบประมาณ" | string;
 
-interface Member { name: string; role: string; }
+interface Member { userId?: string; name: string; role: string; department?: string; }
 
 interface ProjectCard {
   id: string; name: string; description: string; type: ProjectType;
@@ -74,7 +74,7 @@ function ProjectFormModal({ open, onClose, onSave, edit, projectTypes }: {
     setMembers(next);
   };
 
-  const memberUserIds = members.map(m => m.userId).filter(Boolean);
+  const memberUserIds = members.map(m => m.userId).filter((id): id is string => !!id);
 
   const handleSave = () => {
     if (!name.trim()) return;
@@ -333,10 +333,10 @@ export default function ProjectsPage() {
   const PROJECT_TYPES: ProjectType[] = rawProjCats.map(c => c.name);
 
   const [activeProject, setActiveProject] = useState<ProjectCard | null>(null);
-  const [search, setSearch] = useUrlState("search", "");
+  const [search, setSearch] = useUrlState<string>("search", "");
   const [typeParam, setTypeParam] = useUrlState("type", "");
   const typeFilter: ProjectType | null = (typeParam && PROJECT_TYPES.includes(typeParam) ? typeParam : null) as ProjectType | null;
-  const setTypeFilter = (t: ProjectType | null) => setTypeParam(t ?? "");
+  const setTypeFilter = (t: ProjectType | null) => setTypeParam(t ?? "" as string);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ProjectCard | null>(null);
   const [approveTarget, setApproveTarget] = useState<ProjectCard | null>(null);
