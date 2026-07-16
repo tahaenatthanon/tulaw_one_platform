@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError, apiSuccess, parsePagination } from "@/lib/api-utils";
 import { hasPermission, ROLE_LEVELS, type RoleCode } from "@/lib/permissions";
 import { resolveDataScope, buildDocumentPoolWhere } from "@/lib/data-scope";
+import { logAction } from "@/lib/audit-log";
 
 async function auditAction(userId: string, documentId: string, action: string) {
   try {
@@ -123,6 +124,7 @@ export async function POST(req: NextRequest) {
     });
 
     await auditAction(user.id, document.id, "create");
+    await logAction(user.id, "documents", "DOC_UPLOAD", { entityType: "Document", entityId: document.id });
 
     return apiSuccess({
       id: document.id, title: document.title, pool: document.poolType,
@@ -154,6 +156,7 @@ export async function PUT(req: NextRequest) {
 
     const updated = await prisma.document.update({ where: { id }, data: { title: title || doc.title, updatedBy: userId } });
     await auditAction(userId, id, "update");
+    await logAction(userId, "documents", "DOC_UPDATE", { entityType: "Document", entityId: id });
     return apiSuccess(updated);
   } catch (e) {
     console.error("[PUT /api/documents]", e);
@@ -190,6 +193,7 @@ export async function DELETE(req: NextRequest) {
     ]);
 
     await auditAction(userId, id, "delete");
+    await logAction(userId, "documents", "DOC_DELETE", { entityType: "Document", entityId: id });
     return apiSuccess({ id, deletedAt: now.toISOString() });
   } catch {
     return apiError("DB_ERROR", "ไม่สามารถลบเอกสารได้");

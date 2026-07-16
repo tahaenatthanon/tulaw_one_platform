@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import useSWR from "swr";
-import { useSession } from "next-auth/react";
 import {
   ShieldCheck, Key, Palette, HardDrive, Settings,
   Plus, X, Trash2, Save, CheckCircle, Copy, Database, Plug, AlertTriangle,
@@ -11,7 +10,6 @@ import {
 import { cn } from "@/lib/utils";
 import { swrFetcher, fetchApi } from "@/lib/fetcher";
 import { useUrlState } from "@/hooks/use-url-state";
-import { useHasPermission } from "@/hooks/use-permission";
 
 /* ==============================================================================
    Types
@@ -57,23 +55,35 @@ const DEFAULT_STORAGE: StorageSettings = {
   ],
 };
 
-const DEFAULT_API_KEYS: ApiKey[] = [
-  { id: "1", name: "Mobile App", key: "top_sk_2a8f...d71c", permissions: "read:docs, read:announcements", createdAt: "2025-06-15", lastUsed: "2025-07-13 10:30" },
-  { id: "2", name: "ERP Integration", key: "top_sk_3b9e...f82d", permissions: "read:dashboard, read:erp", createdAt: "2025-05-20", lastUsed: "2025-07-12 16:45" },
-];
-
 /* ==============================================================================
-   Save Banner
+   Branding — Apply CSS variables to DOM (system-wide, real-time)
    ============================================================================== */
 
-function SaveBanner({ dirty, onSave }: { dirty: boolean; onSave: () => void }) {
-  if (!dirty) return null;
-  return (
-    <div className="flex items-center justify-between bg-tu-secondary-soft border border-tu-secondary/30 rounded-[--radius-card] px-4 py-2.5 text-sm">
-      <span className="flex items-center gap-2 text-tu-text-primary"><AlertTriangle size={16} className="text-tu-secondary" />คุณยังไม่ได้บันทึกการเปลี่ยนแปลง</span>
-      <button onClick={onSave} className="flex items-center gap-1.5 rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors"><Save size={16} />บันทึกทั้งหมด</button>
-    </div>
-  );
+function applyBranding(branding: BrandingSettings) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (branding.color) {
+    root.style.setProperty("--tu-primary", branding.color);
+    root.style.setProperty("--tu-primary-hover", darkenHex(branding.color, 30));
+    root.style.setProperty("--tu-primary-active", darkenHex(branding.color, 50));
+    root.style.setProperty("--tu-primary-soft", lightenHex(branding.color));
+  }
+}
+
+function darkenHex(hex: string, amount: number): string {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.max(0, ((num >> 16) & 0xFF) - amount);
+  const g = Math.max(0, ((num >> 8) & 0xFF) - amount);
+  const b = Math.max(0, (num & 0xFF) - amount);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
+
+function lightenHex(hex: string): string {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.min(255, ((num >> 16) & 0xFF) + 60);
+  const g = Math.min(255, ((num >> 8) & 0xFF) + 60);
+  const b = Math.min(255, (num & 0xFF) + 60);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
 /* ==============================================================================
@@ -171,10 +181,11 @@ function ApiKeysTabWrapper() {
    Categories Tab Wrapper
    ============================================================================== */
 
-function CategoriesTabWrapper() {
-  const [annCats, setAnnCats] = useState<Category[]>(DEFAULT_STORAGE.annCats);
-  const [projCats, setProjCats] = useState<Category[]>(DEFAULT_STORAGE.projCats);
-  return <CategoriesTab annCats={annCats} projCats={projCats} onAnnsChange={setAnnCats} onProjsChange={setProjCats} />;
+function CategoriesTabWrapper({ annCats, projCats, onChange }: {
+  annCats: Category[]; projCats: Category[];
+  onChange: (ann: Category[], proj: Category[]) => void;
+}) {
+  return <CategoriesTab annCats={annCats} projCats={projCats} onAnnsChange={(a) => onChange(a, projCats)} onProjsChange={(p) => onChange(annCats, p)} />;
 }
 
 /* ==============================================================================
@@ -356,41 +367,60 @@ function CategoriesTab({ annCats, projCats, onAnnsChange, onProjsChange }: {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useUrlState<TabId>("tab", "auth");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   const { data: settingsData, mutate } = useSWR("/api/settings", swrFetcher);
   const settings = (settingsData || {}) as Record<string, Record<string, unknown>>;
 
-  const authForm = (settings.auth || {}) as AuthSettings;
-  const ssoForm = (settings.sso || {}) as SsoSettings;
-  const brandingForm = (settings.branding || DEFAULT_BRANDING) as BrandingSettings;
-  const storageForm = (settings.storage || { quota: "5", fileTypes: ["PDF","XLSX","PPTX","DOCX","PNG","JPG"] }) as StorageSettings;
+  // Form state — initialized from defaults, synced from API on first load
+  const [authForm, setAuthForm] = useState<AuthSettings>(DEFAULT_AUTH);
+  const [ssoForm, setSsoForm] = useState<SsoSettings>(DEFAULT_SSO);
+  const [brandingForm, setBrandingForm] = useState<BrandingSettings>(DEFAULT_BRANDING);
+  const [storageForm, setStorageForm] = useState<StorageSettings>(DEFAULT_STORAGE);
+  const [initialized, setInitialized] = useState(false);
 
-  const setAuthForm = (f: AuthSettings) => { if (settings.auth) settings.auth = f as unknown as Record<string, unknown>; };
-  const setSsoForm = (f: SsoSettings) => { if (settings.sso) settings.sso = f as unknown as Record<string, unknown>; };
-  const setBrandingForm = (f: BrandingSettings) => { if (settings.branding) settings.branding = f as unknown as Record<string, unknown>; };
-  const setStorageForm = (f: StorageSettings) => { if (settings.storage) settings.storage = f as unknown as Record<string, unknown>; };
+  // Sync from API on first load only
+  useEffect(() => {
+    if (settingsData && !initialized) {
+      if (settings.auth) setAuthForm({ ...DEFAULT_AUTH, ...(settings.auth as Partial<AuthSettings>) });
+      if (settings.sso) setSsoForm({ ...DEFAULT_SSO, ...(settings.sso as Partial<SsoSettings>) });
+      if (settings.branding) { const b = { ...DEFAULT_BRANDING, ...(settings.branding as Partial<BrandingSettings>) }; setBrandingForm(b); applyBranding(b); }
+      if (settings.storage) setStorageForm({ ...DEFAULT_STORAGE, ...(settings.storage as Partial<StorageSettings>) });
+      setInitialized(true);
+    }
+  }, [settingsData, initialized]);
 
+  // Explicit save
   const [dirty, setDirty] = useState(false);
-  const markDirty = () => { setDirty(true); setSaved(false); };
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const markDirty = () => { if (!dirty) setDirty(true); setSaved(false); };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const body: Record<string, unknown> = {};
-      if (settings.auth) body.auth = settings.auth;
-      if (settings.sso) body.sso = settings.sso;
-      if (settings.branding) body.branding = settings.branding;
-      if (settings.storage) body.storage = settings.storage;
+      const body: Record<string, unknown> = {
+        auth: authForm,
+        sso: ssoForm,
+        branding: brandingForm,
+        storage: storageForm,
+      };
       await fetchApi("/api/settings", { method: "PUT", body: JSON.stringify(body) });
       await mutate();
+      applyBranding(brandingForm);
       setDirty(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) { console.error("[handleSave]", e); }
     setSaving(false);
   };
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
 
   return (
     <div className="p-6 space-y-4">
@@ -403,13 +433,20 @@ export default function SettingsPage() {
 
       {dirty && (
         <div className="flex items-center justify-between bg-tu-secondary-soft border border-tu-secondary/30 rounded-[--radius-card] px-4 py-2.5 text-sm">
-          <span className="flex items-center gap-2 text-tu-text-primary"><AlertTriangle size={16} className="text-tu-secondary" />คุณยังไม่ได้บันทึกการเปลี่ยนแปลง</span>
+          <span className="flex items-center gap-2 text-tu-text-primary">
+            <AlertTriangle size={16} className="text-tu-secondary" />
+            คุณยังไม่ได้บันทึกการเปลี่ยนแปลง
+          </span>
           <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors disabled:opacity-50">
             <Save size={16} />{saving ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}
           </button>
         </div>
       )}
-      {saved && <div className="flex items-center gap-2 rounded-[--radius-card] bg-tu-success/10 border border-tu-success/30 px-4 py-2.5 text-sm text-tu-success"><CheckCircle size={16} />บันทึกสำเร็จ</div>}
+      {saved && (
+        <div className="flex items-center gap-2 rounded-[--radius-card] bg-tu-success/10 border border-tu-success/30 px-4 py-2.5 text-sm text-tu-success">
+          <CheckCircle size={16} />บันทึกสำเร็จ
+        </div>
+      )}
 
       <div className="flex gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5 w-fit flex-wrap">
         {TABS.map(tab => (
@@ -425,7 +462,7 @@ export default function SettingsPage() {
         {activeTab === "branding" && <BrandingTab form={brandingForm} onChange={(f) => { setBrandingForm(f); markDirty(); }} />}
         {activeTab === "storage" && <StorageSettingsTab form={storageForm} onChange={(f) => { setStorageForm(f); markDirty(); }} />}
         {activeTab === "api-keys" && <ApiKeysTabWrapper />}
-        {activeTab === "categories" && <CategoriesTabWrapper />}
+        {activeTab === "categories" && <CategoriesTabWrapper annCats={storageForm.annCats} projCats={storageForm.projCats} onChange={(a, p) => { setStorageForm({ ...storageForm, annCats: a, projCats: p }); markDirty(); }} />}
         {activeTab === "rooms" && <MeetingRoomsTab />}
         {activeTab === "app-status" && <AppStatusTab />}
       </div>

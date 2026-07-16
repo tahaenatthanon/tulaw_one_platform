@@ -6,12 +6,14 @@ declare module "next-auth" {
       id: string;
       roles: string[];
       departmentId: number | null;
+      mfaVerified?: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
     roles?: string[];
     departmentId?: number;
+    mfaVerified?: boolean;
   }
 }
 
@@ -20,5 +22,6 @@ declare module "next-auth/jwt" {
     id: string;
     roles: string[];
     departmentId: number | null;
+    mfaVerified?: boolean;
   }
 }

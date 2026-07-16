@@ -110,15 +110,41 @@ model Prefix {
 // ==============================================================================
 
 model Role {
-  id        Int        @id @default(autoincrement())
-  roleCode  String     @unique @map("role_code") @db.VarChar(50)
-  nameTh    String     @map("name_th") @db.VarChar(100)
-  level     Int        @default(10)
-  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
-  userRoles UserRole[]
+  id              Int              @id @default(autoincrement())
+  roleCode        String           @unique @map("role_code") @db.VarChar(50)
+  nameTh          String           @map("name_th") @db.VarChar(100)
+  level           Int              @default(10)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
 
   @@map("roles")
+}
+
+model Permission {
+  id              Int              @id @default(autoincrement())
+  code            String           @unique @db.VarChar(100)
+  nameTh          String           @map("name_th") @db.VarChar(255)
+  groupName       String           @map("group_name") @db.VarChar(100)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           Int        @id @default(autoincrement())
+  roleId       Int        @map("role_id")
+  permissionId Int        @map("permission_id")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
 }
 
 // ==============================================================================
@@ -133,6 +159,10 @@ model User {
   departmentId  Int               @map("department_id")
   passwordHash  String?           @map("password_hash") @db.VarChar(255)
   status        UserStatus        @default(ACTIVE)
+  authSource    String            @default("ldap") @map("auth_source") @db.VarChar(20)
+  isLocked      Boolean           @default(false) @map("is_locked")
+  lastAdSyncAt  DateTime?         @map("last_ad_sync_at") @db.Timestamptz(6)
+  ipAddress     String?           @map("ip_address") @db.VarChar(50)
   createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt     DateTime?         @map("deleted_at") @db.Timestamptz(6)
@@ -211,23 +241,26 @@ model UserRole {
   user      User      @relation(fields: [userId], references: [id])
   role      Role      @relation(fields: [roleId], references: [id])
 
+  @@unique([userId, roleId])
   @@map("user_roles")
 }
 
 model UserMfa {
-  id         String    @id @default(uuid()) @db.Uuid
-  userId     String    @map("user_id") @db.Uuid
-  secret     String    @db.VarChar(255)
-  backupCode String?   @map("backup_code") @db.VarChar(255)
-  isEnabled  Boolean   @default(false) @map("is_enabled")
-  verifiedAt DateTime? @map("verified_at") @db.Timestamptz(6)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz(6)
-  createdBy  String?   @map("created_by") @db.Uuid
-  updatedBy  String?   @map("updated_by") @db.Uuid
-  deletedBy  String?   @map("deleted_by") @db.Uuid
-  user       User      @relation(fields: [userId], references: [id])
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  secret         String    @db.VarChar(255)
+  backupCodes    Json      @default("[]") @map("backup_codes")
+  isEnabled      Boolean   @default(false) @map("is_enabled")
+  verifiedAt     DateTime? @map("verified_at") @db.Timestamptz(6)
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lastFailedAt   DateTime? @map("last_failed_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+  deletedBy      String?   @map("deleted_by") @db.Uuid
+  user           User      @relation(fields: [userId], references: [id])
 
   @@map("user_mfa")
 }

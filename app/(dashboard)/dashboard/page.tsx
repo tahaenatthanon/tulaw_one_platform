@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import useSWR from "swr";
@@ -9,9 +9,16 @@ import {
   Newspaper, BookOpen, ExternalLink, BarChart3, TrendingUp,
   PieChart, Activity, Building2, RefreshCw,
 } from "lucide-react";
+import {
+  AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart as RPieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ReferenceLine, LabelList,
+} from "recharts";
 import { cn } from "@/lib/utils";
 import { swrFetcher } from "@/lib/fetcher";
 import { useHasMinRoleLevel } from "@/hooks/use-permission";
+import { useChartPalette } from "@/hooks/use-chart-colors";
+import { ChartTooltip, SimpleTooltip } from "@/components/charts/chart-tooltip";
 
 /* ==============================================================================
    Types
@@ -51,8 +58,6 @@ const views: { id: ViewId; label: string; icon: typeof TrendingUp }[] = [
   { id: "proportion", label: "Proportion", icon: PieChart },
   { id: "comparison", label: "Comparison", icon: Activity },
 ];
-
-const CHART_COLORS = ["var(--tu-primary)", "var(--tu-info)", "var(--tu-secondary-active)", "var(--tu-success)", "var(--tu-warning)", "var(--tu-text-muted)"];
 
 const STAT_CARDS = [
   { key: "personnel", label: "จำนวนบุคลากร", icon: Users, color: "text-tu-primary", bg: "bg-tu-primary-soft", defaultValue: 247 },
@@ -97,6 +102,7 @@ function StatCard({ label, value, icon: Icon, color, bg }: { label: string; valu
 }
 
 function PersonnelBreakdown({ stats, proportion }: { stats: OrgStats; proportion: ProportDept[] }) {
+  const colors = useChartPalette();
   return (
     <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-5">
       <div className="flex items-center gap-2 mb-4">
@@ -109,13 +115,20 @@ function PersonnelBreakdown({ stats, proportion }: { stats: OrgStats; proportion
         ))}
       </div>
       <h4 className="text-xs font-semibold text-tu-text-secondary mb-2 flex items-center gap-1.5"><BarChart3 size={12} />สัดส่วนบุคลากรแยกตามหน่วยงาน</h4>
-      <div className="space-y-2">
-        {proportion.length === 0 ? <p className="text-xs text-tu-text-muted">ไม่มีข้อมูล</p> : proportion.map((d, i) => {
-          const total = proportion.reduce((s, x) => s + x.value, 0); const pct = total ? Math.round((d.value / total) * 100) : 0;
-          const colors = ["bg-tu-primary", "bg-tu-info", "bg-tu-success", "bg-tu-warning", "bg-tu-secondary-active"];
-          return (<div key={d.name} className="space-y-1"><div className="flex justify-between text-xs"><span className="text-tu-text-secondary">{d.name}</span><span className="font-medium text-tu-text-primary tabular-nums">{d.value} ({pct}%)</span></div><div className="h-2 rounded-full bg-tu-bg overflow-hidden"><div className={cn("h-full rounded-full transition-all", colors[i % colors.length])} style={{ width: `${pct}%` }} /></div></div>);
-        })}
-      </div>
+      {proportion.length === 0 ? <p className="text-xs text-tu-text-muted">ไม่มีข้อมูล</p> : (
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={proportion} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--tu-border)" />
+            <XAxis type="number" hide />
+            <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--tu-text-secondary)" }} width={80} axisLine={false} tickLine={false} />
+            <Tooltip content={<ChartTooltip valueFormatter={(v) => v.toLocaleString("th-TH")} />} />
+            <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} animationDuration={400} animationEasing="ease">
+              {proportion.map((_, i) => (<Cell key={i} fill={colors[i % colors.length]} />))}
+              <LabelList dataKey="value" position="right" style={{ fontSize: 11, fill: "var(--tu-text-primary)" }} formatter={(v: number) => v.toLocaleString("th-TH")} />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }
@@ -159,33 +172,152 @@ function NewsCard() {
 }
 
 /* ==============================================================================
-   DeptMiniChart — 5 view modes
+   Overview Chart --- Area Chart
    ============================================================================== */
 
-function DeptMiniChart({ view, analytics }: { view: ViewId; analytics: DashboardData["analytics"] | undefined }) {
-  const a = analytics; if (!a) return <div className="h-20 flex items-center justify-center text-xs text-tu-text-muted">Loading...</div>;
+function OverviewChart({ data }: { data: WeeklyPoint[] }) {
+  const colors = useChartPalette();
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+        <defs>
+          <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={colors[0]} stopOpacity={0.25} />
+            <stop offset="100%" stopColor={colors[0]} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--tu-border)" />
+        <XAxis dataKey="day" tick={{ fontSize: 11, fill: "var(--tu-text-muted)" }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: "var(--tu-text-muted)" }} axisLine={false} tickLine={false} />
+        <Tooltip content={<SimpleTooltip />} />
+        <Area type="monotone" dataKey="value" stroke={colors[0]} fill="url(#areaGrad)" strokeWidth={2} animationDuration={400} animationEasing="ease" />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
 
-  if (view === "weekly" && a.weeklyByDay) {
-    const max = Math.max(1, ...a.weeklyByDay.map(w => w.value));
-    return (<div className="flex items-end justify-between gap-1 h-20">{a.weeklyByDay.map((wd, i) => (<div key={wd.day} className="flex flex-col items-center gap-1 flex-1 h-full justify-end"><div className="w-full rounded-t-sm" style={{ height: `${Math.max(3, (wd.value / max) * 100)}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} /><span className="text-[9px] text-tu-text-muted">{wd.day.slice(0, 1)}</span></div>))}</div>);
+/* ==============================================================================
+   Weekly Chart --- Bar Chart by day
+   ============================================================================== */
+
+function WeeklyBarChart({ weekly }: { weekly: WeeklyPoint[] }) {
+  const colors = useChartPalette();
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={weekly} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--tu-border)" />
+        <XAxis dataKey="day" tick={{ fontSize: 11, fill: "var(--tu-text-muted)" }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: "var(--tu-text-muted)" }} axisLine={false} tickLine={false} />
+        <Tooltip content={<ChartTooltip valueFormatter={(v) => v.toLocaleString("th-TH")} />} />
+        <Bar dataKey="value" radius={[4, 4, 0, 0]} animationDuration={400} animationEasing="ease">
+          {weekly.map((_, i) => (<Cell key={i} fill={colors[i % colors.length]} />))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ==============================================================================
+   Trend Chart --- Multi-series Line Chart
+   ============================================================================== */
+
+function TrendLineChart({ trend }: { trend: MonthlyTrend }) {
+  const colors = useChartPalette();
+  const data = trend.labels.map((label, i) => ({
+    month: label,
+    เอกสาร: trend.documents[i],
+    จองห้อง: trend.bookings[i],
+    โครงการ: trend.projects[i],
+  }));
+
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <LineChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--tu-border)" />
+        <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--tu-text-muted)" }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: "var(--tu-text-muted)" }} axisLine={false} tickLine={false} />
+        <Tooltip content={<ChartTooltip />} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Line type="monotone" dataKey="เอกสาร" stroke={colors[0]} strokeWidth={2} dot={{ r: 3, fill: colors[0] }} activeDot={{ r: 5 }} animationDuration={400} animationEasing="ease" />
+        <Line type="monotone" dataKey="จองห้อง" stroke={colors[1]} strokeWidth={2} dot={{ r: 3, fill: colors[1] }} activeDot={{ r: 5 }} animationDuration={400} animationEasing="ease" />
+        <Line type="monotone" dataKey="โครงการ" stroke={colors[2]} strokeWidth={2} dot={{ r: 3, fill: colors[2] }} activeDot={{ r: 5 }} animationDuration={400} animationEasing="ease" />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ==============================================================================
+   Proportion Chart --- Donut
+   ============================================================================== */
+
+function ProportionDonut({ data }: { data: ProportDept[] }) {
+  const colors = useChartPalette();
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <RPieChart>
+        <Pie
+          data={data}
+          cx="50%"
+          cy="50%"
+          innerRadius={65}
+          outerRadius={105}
+          dataKey="value"
+          nameKey="name"
+          animationDuration={400}
+          animationEasing="ease"
+          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+          labelLine={{ stroke: "var(--tu-text-muted)", strokeWidth: 1 }}
+        >
+          {data.map((_, i) => (<Cell key={i} fill={colors[i % colors.length]} />))}
+        </Pie>
+        <Tooltip content={<ChartTooltip valueFormatter={(v) => v.toLocaleString("th-TH")} />} />
+      </RPieChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ==============================================================================
+   Comparison Chart --- Grouped Bar + % change labels
+   ============================================================================== */
+
+function ComparisonChart({ data }: { data: ComparisonPoint[] }) {
+  const colors = useChartPalette();
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={data} margin={{ top: 20, right: 5, left: -20, bottom: 0 }} barCategoryGap="25%">
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--tu-border)" />
+        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--tu-text-muted)" }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: "var(--tu-text-muted)" }} axisLine={false} tickLine={false} />
+        <ReferenceLine y={0} stroke="var(--tu-border)" />
+        <Tooltip content={<ChartTooltip />} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Bar name="เดือนนี้" dataKey="thisMonth" fill={colors[0]} radius={[4, 4, 0, 0]} animationDuration={400} animationEasing="ease" />
+        <Bar name="เดือนก่อน" dataKey="lastMonth" fill={colors[4]} radius={[4, 4, 0, 0]} opacity={0.6} animationDuration={400} animationEasing="ease" />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ==============================================================================
+   Chart Panel --- renders correct chart per view
+   ============================================================================== */
+
+function DeptChartPanel({ view, analytics }: { view: ViewId; analytics: DashboardData["analytics"] | undefined }) {
+  const a = analytics;
+  if (!a) return <div className="h-64 flex items-center justify-center text-xs text-tu-text-muted">Loading...</div>;
+
+  switch (view) {
+    case "weekly":
+      return <WeeklyBarChart weekly={a.weeklyByDay} />;
+    case "trend":
+      return <TrendLineChart trend={a.monthlyTrend} />;
+    case "proportion":
+      return <ProportionDonut data={a.userProportionByDept} />;
+    case "comparison":
+      return <ComparisonChart data={a.comparison} />;
+    default:
+      return <OverviewChart data={a.weeklyByDay} />;
   }
-  if (view === "trend" && a.monthlyTrend) {
-    const allVals = [...a.monthlyTrend.documents, ...a.monthlyTrend.bookings, ...a.monthlyTrend.projects]; const max = Math.max(1, ...allVals);
-    const series = [{ data: a.monthlyTrend.projects, color: "var(--tu-primary)" },{ data: a.monthlyTrend.documents, color: "var(--tu-info)" },{ data: a.monthlyTrend.bookings, color: "var(--tu-secondary-active)" }];
-    return (<div className="flex items-end gap-1 h-20">{a.monthlyTrend.labels.map((_, i) => (<div key={i} className="flex-1 flex items-end gap-[2px] h-full">{series.map((s, si) => (<div key={si} className="flex-1 rounded-t-[2px]" style={{ height: `${Math.max(2, (s.data[i] / max) * 100)}%`, backgroundColor: s.color }} />))}</div>))}</div>);
-  }
-  if (view === "proportion" && a.userProportionByDept) {
-    const total = a.userProportionByDept.reduce((s, x) => s + x.value, 0);
-    return (<div className="space-y-1.5 py-1">{a.userProportionByDept.slice(0, 4).map((pd, i) => { const pct = total ? Math.round((pd.value / total) * 100) : 0; return (<div key={pd.name} className="flex items-center gap-1 text-[10px]"><span className="h-2 w-2 rounded-sm shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} /><span className="text-tu-text-muted w-14 truncate">{pd.name}</span><div className="flex-1 h-1 rounded-full bg-tu-border overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} /></div><span className="font-medium tabular-nums">{pct}%</span></div>); })}</div>);
-  }
-  if (view === "comparison" && a.comparison) {
-    return (<div className="flex items-center gap-3 h-20">{a.comparison.slice(0, 2).map((cd) => { const max = Math.max(1, cd.thisMonth, cd.lastMonth); return (<div key={cd.label} className="flex-1 space-y-1"><span className="text-[9px] text-tu-text-muted">{cd.label}</span><div className="flex items-end gap-1 h-12"><div className="flex-1 rounded-t-sm bg-tu-primary" style={{ height: `${Math.max(2, (cd.thisMonth / max) * 100)}%` }} /><div className="flex-1 rounded-t-sm bg-tu-text-muted/30" style={{ height: `${Math.max(2, (cd.lastMonth / max) * 100)}%` }} /></div><div className="flex gap-2 text-[9px]"><span className="text-tu-primary font-medium">{cd.thisMonth}</span><span className="text-tu-text-muted">{cd.lastMonth}</span></div></div>); })}</div>);
-  }
-  if (a.weeklyByDay) {
-    const max = Math.max(1, ...a.weeklyByDay.map(w => w.value));
-    return (<div className="flex items-end justify-between gap-0.5 h-20">{a.weeklyByDay.map((wd, i) => (<div key={wd.day} className="flex flex-col items-center flex-1 gap-0.5 h-full justify-end"><div className="w-full rounded-t-sm" style={{ height: `${Math.max(3, (wd.value / max) * 100)}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} /><span className="text-[9px] text-tu-text-muted">{wd.day.slice(0, 1)}</span></div>))}</div>);
-  }
-  return <div className="h-20 flex items-center justify-center text-xs text-tu-text-muted">—</div>;
 }
 
 /* ==============================================================================
@@ -196,15 +328,13 @@ function DashboardPageContent() {
   const router = useRouter(); const searchParams = useSearchParams();
   const rawView = searchParams.get("view") as ViewId | null;
 
-  // Filter views based on role: Comparison view only for Dean+ (level >= 70)
   const isDeanOrHigher = useHasMinRoleLevel(70);
   const visibleViews = isDeanOrHigher ? views : views.filter(v => v.id !== "comparison");
   const ALLOWED_VIEWS_FILTERED: ViewId[] = isDeanOrHigher ? ALLOWED_VIEWS : ALLOWED_VIEWS.filter(v => v !== "comparison");
   const view: ViewId = rawView && ALLOWED_VIEWS_FILTERED.includes(rawView) ? rawView : "overview";
 
-  // SWR: auto-cached, revalidates on focus every 5 min
   const { data, error: statsError, isLoading } = useSWR("/api/dashboard/stats", swrFetcher<DashboardData>, {
-    refreshInterval: 300000, // revalidate every 5 min (not 60s)
+    refreshInterval: 300000,
     revalidateOnFocus: true,
   });
   const { data: deptStats } = useSWR("/api/dashboard/department-stats", swrFetcher<DeptStat[]>);
@@ -212,7 +342,7 @@ function DashboardPageContent() {
 
   const setView = useCallback((v: ViewId) => { const params = new URLSearchParams(searchParams.toString()); params.set("view", v); router.push(`/dashboard?${params.toString()}`, { scroll: false }); }, [router, searchParams]);
 
-  if (isLoading) return (<div className="p-6 space-y-6 animate-pulse"><div className="h-8 w-48 bg-tu-surface rounded" /><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{Array.from({ length: 3 }).map((_, i) => (<div key={i} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-5 h-[104px]" />))}</div></div>);
+  if (isLoading) return (<div className="p-6 space-y-6"><div className="h-8 w-48 bg-tu-surface rounded animate-pulse" /><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{Array.from({ length: 3 }).map((_, i) => (<div key={i} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-5 h-[104px] animate-pulse" />))}</div></div>);
   if (error) return (<div className="p-6"><div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-10 text-center"><p className="text-tu-error font-semibold mb-2">ไม่สามารถโหลดข้อมูลได้</p><p className="text-sm text-tu-text-muted mb-4">{error}</p><button onClick={() => window.location.reload()} className="rounded-[--radius-btn] bg-tu-primary text-white px-4 py-2 text-sm font-medium hover:bg-tu-primary-hover transition-colors">ลองใหม่</button></div></div>);
 
   const statValues: Record<string, number> = { personnel: data?.orgStats.personnel ?? 247, courses: 38, students: 2847 };
@@ -228,29 +358,34 @@ function DashboardPageContent() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{STAT_CARDS.map((card) => (<StatCard key={card.key} label={card.label} value={statValues[card.key] ?? card.defaultValue} icon={card.icon} color={card.color} bg={card.bg} />))}</div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><PersonnelBreakdown stats={data!.orgStats} proportion={a?.userProportionByDept ?? []} /><AnnouncementsCard items={data?.latestAnnouncements ?? []} /></div>
 
-      {/* Department Breakdown + 5 View Modes */}
+      {/* Main BI Chart Area */}
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <div><h2 className="text-base font-semibold text-tu-text-primary flex items-center gap-2"><Building2 size={18} className="text-tu-primary" />Dashboard แยกรายฝ่าย</h2><p className="text-xs text-tu-text-muted mt-0.5">ข้อมูล 3 ฝ่าย</p></div>
+          <div><h2 className="text-base font-semibold text-tu-text-primary flex items-center gap-2"><Building2 size={18} className="text-tu-primary" />Dashboard แยกรายฝ่าย</h2><p className="text-xs text-tu-text-muted mt-0.5">ข้อมูล BI แสดงผลตามมุมมองที่เลือก</p></div>
           <div className="flex gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5">{visibleViews.map((v) => (<button key={v.id} onClick={() => setView(v.id)} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors", view === v.id ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary hover:text-tu-text-primary")}><v.icon size={14} />{v.label}</button>))}</div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {deptCards.map((d) => {
-            const cfg = deptConfigs[d.key] ?? { label: d.key, color: "text-tu-primary", bg: "bg-tu-primary-soft" };
-            return (
-              <div key={d.key} className="bg-tu-surface rounded-[--radius-card] border border-tu-border hover:shadow-md transition-shadow overflow-hidden">
-                <div className="px-5 pt-5 pb-3 border-b border-tu-border">
-                  <div className="flex items-center gap-3"><div className={cn("flex h-9 w-9 items-center justify-center rounded-xl font-bold text-sm", cfg.bg, cfg.color)}>{cfg.label}</div><div><h3 className="text-sm font-semibold text-tu-text-primary leading-tight">{d.name}</h3><p className="text-[10px] text-tu-text-muted">{d.users} บุคลากร · {d.documents} เอกสาร</p></div></div>
-                </div>
-                <div className="grid grid-cols-4 gap-1 px-3 py-3 border-b border-tu-border bg-tu-bg/30">{[{ v: d.users, l: "บุคลากร" },{ v: d.documents, l: "เอกสาร" },{ v: d.projects, l: "โครงการ" },{ v: d.todayBookings, l: "จองวันนี้" }].map((s, si) => (<div key={si} className="text-center py-1.5"><p className="text-sm font-bold text-tu-text-primary tabular-nums">{s.v}</p><p className="text-[9px] text-tu-text-muted">{s.l}</p></div>))}</div>
-                <div className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-2"><span className="text-[11px] font-medium text-tu-text-secondary">{view === "overview" ? "ภาพรวมรายสัปดาห์" : view === "weekly" ? "กิจกรรมรายวัน" : view === "trend" ? "แนวโน้มรายเดือน" : view === "proportion" ? "สัดส่วน" : "เปรียบเทียบ"}</span><span className="text-[9px] text-tu-text-muted">{views.find(v => v.id === view)?.label}</span></div>
-                  <DeptMiniChart view={view} analytics={a} />
-                </div>
-              </div>
-            );
-          })}
+        <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-5">
+          <DeptChartPanel view={view} analytics={a} />
         </div>
+      </div>
+
+      {/* Department Cards --- summary stats */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {deptCards.map((d) => {
+          const cfg = deptConfigs[d.key] ?? { label: d.key, color: "text-tu-primary", bg: "bg-tu-primary-soft" };
+          return (
+            <div key={d.key} className="bg-tu-surface rounded-[--radius-card] border border-tu-border hover:shadow-md transition-shadow overflow-hidden">
+              <div className="px-5 pt-5 pb-3 border-b border-tu-border">
+                <div className="flex items-center gap-3"><div className={cn("flex h-9 w-9 items-center justify-center rounded-xl font-bold text-sm", cfg.bg, cfg.color)}>{cfg.label}</div><div><h3 className="text-sm font-semibold text-tu-text-primary leading-tight">{d.name}</h3><p className="text-[10px] text-tu-text-muted">{d.users} บุคลากร · {d.documents} เอกสาร</p></div></div>
+              </div>
+              <div className="grid grid-cols-4 gap-1 px-3 py-3 border-b border-tu-border bg-tu-bg/30">{[{ v: d.users, l: "บุคลากร" },{ v: d.documents, l: "เอกสาร" },{ v: d.projects, l: "โครงการ" },{ v: d.todayBookings, l: "จองวันนี้" }].map((s, si) => (<div key={si} className="text-center py-1.5"><p className="text-sm font-bold text-tu-text-primary tabular-nums">{s.v}</p><p className="text-[9px] text-tu-text-muted">{s.l}</p></div>))}</div>
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between mb-1"><span className="text-[11px] font-medium text-tu-text-secondary">ตัวชี้วัดสำคัญ</span></div>
+                <div className="text-xs text-tu-text-muted">{d.documents + d.projects} รายการทั้งหมด · {d.todayBookings} จองวันนี้</div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <NewsCard />

@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import { useState, useEffect, useCallback } from "react";
+import useSWR from "swr";
+import { swrFetcher } from "@/lib/fetcher";
 import {
   Search, Star, Calculator, FileText, FolderSearch, GraduationCap,
   Users2, Grid3X3, List, Wifi, Activity, Server, AlertTriangle,
@@ -11,15 +13,17 @@ import { useUrlState } from "@/hooks/use-url-state";
 
 interface AppGroup {
   id: string; name: string; description: string; icon: React.ElementType;
-  online: boolean; userCount: number;
+  userCount: number;
 }
 
+type AppStatus = "online" | "maintenance" | "offline";
+
 const appGroups: AppGroup[] = [
-  { id: "erp", name: "ERP", description: "ระบบบริหารทรัพยากรองค์กร", icon: Calculator, online: true, userCount: 45 },
-  { id: "e-office", name: "E-Office", description: "ระบบสารบรรณอิเล็กทรอนิกส์", icon: FileText, online: true, userCount: 62 },
-  { id: "document-management", name: "จัดการเอกสาร", description: "ระบบจัดการเอกสาร", icon: FolderSearch, online: true, userCount: 78 },
-  { id: "academic", name: "งานวิชาการ", description: "ระบบงานวิชาการ", icon: GraduationCap, online: true, userCount: 34 },
-  { id: "hr", name: "งานบุคคล", description: "ระบบบริหารทรัพยากรบุคคล", icon: Users2, online: true, userCount: 28 },
+  { id: "erp", name: "ERP", description: "ระบบบริหารทรัพยากรองค์กร", icon: Calculator, userCount: 45 },
+  { id: "e-office", name: "E-Office", description: "ระบบสารบรรณอิเล็กทรอนิกส์", icon: FileText, userCount: 62 },
+  { id: "document-management", name: "จัดการเอกสาร", description: "ระบบจัดการเอกสาร", icon: FolderSearch, userCount: 78 },
+  { id: "academic", name: "งานวิชาการ", description: "ระบบงานวิชาการ", icon: GraduationCap, userCount: 34 },
+  { id: "hr", name: "งานบุคคล", description: "ระบบบริหารทรัพยากรบุคคล", icon: Users2, userCount: 28 },
 ];
 
 export default function ApplicationHubPage() {
@@ -45,7 +49,19 @@ export default function ApplicationHubPage() {
 
   const canPin = useHasMinRoleLevel(30); // Viewer (level 10) cannot pin
 
-  const visibleApps: AppGroup[] = appGroups.filter((a) => canView[a.id as keyof typeof canView]);
+  // Fetch app statuses from Settings API (real-time) — match by name
+  const { data: appsData } = useSWR("/api/settings/app-status", swrFetcher);
+  const statusMap = new Map<string, AppStatus>(
+    (Array.isArray(appsData) ? appsData : []).map((a: { name: string; status: string }) => [a.name, a.status as AppStatus])
+  );
+
+  // Merge appGroups with real status from API — fallback to "online" if not loaded
+  const apps = appGroups.map(a => ({
+    ...a,
+    status: (statusMap.get(a.name) as AppStatus) || "online",
+  }));
+
+  const visibleApps = apps.filter((a) => canView[a.id as keyof typeof canView]);
   const filtered = visibleApps.filter((a) =>
     search === "" || a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase())
   );
@@ -62,9 +78,9 @@ export default function ApplicationHubPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "ระบบทั้งหมด", value: visibleApps.length.toString(), sub: `${visibleApps.length} หมวดหมู่`, icon: Server, c: "text-tu-primary", b: "bg-tu-primary-soft" },
-          { label: "กำลังออนไลน์", value: String(visibleApps.filter(a => a.online).length), sub: `${Math.round((visibleApps.filter(a => a.online).length / Math.max(1, visibleApps.length)) * 100)}%`, icon: Wifi, c: "text-tu-info", b: "bg-tu-info/10" },
+          { label: "กำลังออนไลน์", value: String(visibleApps.filter(a => a.status === "online").length), sub: `${Math.round((visibleApps.filter(a => a.status === "online").length / Math.max(1, visibleApps.length)) * 100)}%`, icon: Wifi, c: "text-tu-info", b: "bg-tu-info/10" },
           { label: "Active Users", value: String(visibleApps.reduce((s, a) => s + a.userCount, 0)), sub: "วันนี้", icon: Activity, c: "text-tu-success", b: "bg-tu-success/10" },
-          { label: "บำรุงรักษา", value: String(visibleApps.filter(a => !a.online).length), sub: visibleApps.filter(a => !a.online).map(a => a.name).join(", ") || "0", icon: AlertTriangle, c: "text-tu-warning", b: "bg-tu-warning/10" },
+          { label: "บำรุงรักษา", value: String(visibleApps.filter(a => a.status !== "online").length), sub: visibleApps.filter(a => a.status !== "online").map(a => a.name).join(", ") || "0", icon: AlertTriangle, c: "text-tu-warning", b: "bg-tu-warning/10" },
         ].map((s) => (
           <div key={s.label} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 flex items-center gap-3">
             <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${s.b}`}><s.icon size={20} className={s.c} /></div>
@@ -107,25 +123,39 @@ export default function ApplicationHubPage() {
   );
 }
 
+interface AppWithStatus extends AppGroup {
+  status: AppStatus;
+}
+
 /* ==============================================================================
    AppCard — Grid / List
    ============================================================================== */
 
+function statusConfig(status: AppStatus) {
+  return {
+    online: { dot: "bg-tu-success", label: "Online", color: "text-tu-success" },
+    maintenance: { dot: "bg-tu-warning animate-pulse", label: "Maintenance", color: "text-tu-warning" },
+    offline: { dot: "bg-tu-error", label: "Offline", color: "text-tu-error" },
+  }[status] ?? { dot: "bg-tu-success", label: "Online", color: "text-tu-success" };
+}
+
 function AppCard({ app, viewMode, isPinned, onTogglePin, canPin }: {
-  app: AppGroup; viewMode: "grid" | "list"; isPinned: boolean; onTogglePin: () => void; canPin: boolean;
+  app: AppWithStatus; viewMode: "grid" | "list"; isPinned: boolean; onTogglePin: () => void; canPin: boolean;
 }) {
+  const s = statusConfig(app.status);
+
   if (viewMode === "list") {
     return (
       <div className="group bg-tu-surface rounded-[--radius-card] border border-tu-border hover:shadow-md transition-all">
         <div className="flex items-center gap-3 p-4">
           <div className="relative shrink-0">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-tu-primary-soft"><app.icon size={22} className="text-tu-primary" /></div>
-            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-tu-surface ${app.online ? "bg-tu-success" : "bg-tu-warning"}`} />
+            <span className={cn("absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-tu-surface", s.dot)} />
           </div>
           <div className="flex-1 min-w-0"><span className="text-sm font-semibold text-tu-text-primary">{app.name}</span><p className="text-xs text-tu-text-muted">{app.description}</p></div>
           <div className="text-right shrink-0 text-xs text-tu-text-muted">
             <p className="flex items-center gap-1"><Users2 size={12} />{app.userCount} users</p>
-            <p className={app.online ? "text-tu-success" : "text-tu-warning"}>{app.online ? "● Online" : "● Offline"}</p>
+            <p className={s.color}>● {s.label}</p>
           </div>
           {canPin && (
             <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all"><Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} /></button>
@@ -137,30 +167,23 @@ function AppCard({ app, viewMode, isPinned, onTogglePin, canPin }: {
 
   return (
     <div className="group relative bg-tu-surface rounded-[--radius-card] border border-tu-border p-5 hover:shadow-md transition-all flex flex-col items-center text-center">
-      {/* Pin — hover only (hidden for Viewer) */}
       {canPin && (
         <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all">
           <Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} />
         </button>
       )}
 
-      {/* Icon + status dot */}
       <div className="relative mb-3">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-tu-primary-soft">
           <app.icon size={28} className="text-tu-primary" />
         </div>
-        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-tu-surface ${app.online ? "bg-tu-success" : "bg-tu-warning"}`} />
+        <span className={cn("absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-tu-surface", s.dot)} />
       </div>
 
-      {/* Name */}
       <h3 className="text-sm font-semibold text-tu-text-primary mb-1">{app.name}</h3>
-
-      {/* Description */}
       <p className="text-xs text-tu-text-muted mb-3">{app.description}</p>
-
-      {/* Users + Status */}
       <p className="text-xs text-tu-text-muted flex items-center gap-1 mb-1"><Users2 size={12} />{app.userCount} users</p>
-      <p className={cn("text-xs font-medium", app.online ? "text-tu-success" : "text-tu-warning")}>{app.online ? "● Online" : "● Offline"}</p>
+      <p className={cn("text-xs font-medium", s.color)}>● {s.label}</p>
     </div>
   );
 }

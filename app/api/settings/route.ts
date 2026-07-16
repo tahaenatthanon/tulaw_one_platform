@@ -1,12 +1,11 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-utils";
 import { hasPermission, ROLE_LEVELS, type RoleCode } from "@/lib/permissions";
+import { logAction } from "@/lib/audit-log";
 
 const DEFAULTS: Record<string, unknown> = {
   "auth.sessionTimeout": "28800",
@@ -25,7 +24,9 @@ const DEFAULTS: Record<string, unknown> = {
 };
 
 function parseValue(key: string, val: string) {
-  if (key.includes("fileTypes")) return JSON.parse(val);
+  if (key.includes("fileTypes") || key.includes("annCats") || key.includes("projCats") || key.includes("projectTypes")) {
+    try { return JSON.parse(val); } catch { return val; }
+  }
   if (val === "true") return true;
   if (val === "false") return false;
   if (/^\d+$/.test(val)) return val;
@@ -131,6 +132,10 @@ export async function PUT(req: NextRequest) {
         console.error("[settings] CSS update failed:", cssErr);
       }
     }
+
+    await logAction(session.user.id, "settings", "CONFIG_UPDATE", {
+      entityType: "SystemConfig", newValue: `${entries.length} settings updated`,
+    });
 
     // Re-read and return
     const rows = await prisma.systemConfig.findMany();

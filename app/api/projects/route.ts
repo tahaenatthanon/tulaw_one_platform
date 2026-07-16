@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError, apiSuccess, parsePagination } from "@/lib/api-utils";
 import { hasPermission, ROLE_LEVELS, type RoleCode } from "@/lib/permissions";
 import { resolveDataScope } from "@/lib/data-scope";
+import { logAction } from "@/lib/audit-log";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -128,6 +129,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    await logAction(session.user.id, "projects", "PROJECT_CREATE", { entityType: "Project", entityId: project.id as string });
     return apiSuccess(project);
   } catch (e: unknown) {
     console.error("[POST /api/projects]", e);
@@ -187,6 +189,8 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    const action = status === "completed" ? "PROJECT_APPROVE" : status === "rejected" ? "PROJECT_REJECT" : "PROJECT_UPDATE";
+    await logAction(session.user.id, "projects", action, { entityType: "Project", entityId: id });
     return apiSuccess({ updated: true });
   } catch (e: unknown) {
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
@@ -228,6 +232,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     await prisma.project.update({ where: { id }, data: { deletedAt: new Date(), deletedBy: session.user.id } });
+    await logAction(session.user.id, "projects", "PROJECT_DELETE", { entityType: "Project", entityId: id });
     return apiSuccess({ deleted: true });
   } catch (e: unknown) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {

@@ -23,7 +23,7 @@ import { useHasPermission } from "@/hooks/use-permission";
    ============================================================================== */
 
 type ColumnId = "planning" | "in_progress" | "pending_approval" | "completed";
-type ProjectType = "วิชาการ" | "หลักสูตร" | "สัมมนา" | "IT" | "งบประมาณ";
+type ProjectType = "วิชาการ" | "หลักสูตร" | "สัมมนา" | "IT" | "งบประมาณ" | string;
 
 interface Member { name: string; role: string; }
 
@@ -40,14 +40,15 @@ const COLUMNS: { id: ColumnId; label: string; color: string }[] = [
   { id: "completed", label: "Completed", color: "border-t-tu-success" },
 ];
 
-const PROJECT_TYPES: ProjectType[] = ["วิชาการ", "หลักสูตร", "สัมมนา", "IT", "งบประมาณ"];
+const DEFAULT_PROJECT_TYPES: ProjectType[] = ["วิชาการ", "หลักสูตร", "สัมมนา", "IT", "งบประมาณ"];
 
 /* ==============================================================================
    Create / Edit Project Modal
    ============================================================================== */
 
-function ProjectFormModal({ open, onClose, onSave, edit }: {
+function ProjectFormModal({ open, onClose, onSave, edit, projectTypes }: {
   open: boolean; onClose: () => void;
+  projectTypes: ProjectType[];
   onSave: (data: { name: string; type: ProjectType; description: string; startDate: string; deadline: string; members: Member[]; progress?: number }) => void;
   edit?: ProjectCard;
 }) {
@@ -106,7 +107,7 @@ function ProjectFormModal({ open, onClose, onSave, edit }: {
             </button>
             {ddOpen && (
               <div className="absolute top-full mt-1 w-full bg-tu-surface border border-tu-border rounded-lg shadow-lg z-10 py-1">
-                {PROJECT_TYPES.map(t => (
+                {projectTypes.map(t => (
                   <button key={t} onClick={() => { setType(t); setDdOpen(false); }} className={cn("w-full text-left px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors", type === t && "bg-tu-primary-soft text-tu-primary font-medium")}>{t}</button>
                 ))}
               </div>
@@ -322,10 +323,19 @@ function DroppableColumn({ col, projects, onEdit, onApproveClick, onRejectClick,
 export default function ProjectsPage() {
   const { data: apiProjects, isLoading, mutate } = useSWR("/api/projects", swrFetcher);
   const projects: ProjectCard[] = Array.isArray(apiProjects) ? apiProjects : [];
+
+  // Fetch project types from System Settings API
+  const { data: settingsData } = useSWR("/api/settings", swrFetcher);
+  const settings = (settingsData || {}) as Record<string, Record<string, unknown>>;
+  const storageSection = (settings.storage || {}) as Record<string, unknown>;
+  const rawProjCats: Array<{ id: string; name: string }> =
+    (Array.isArray(storageSection.projCats) ? storageSection.projCats : DEFAULT_PROJECT_TYPES.map(n => ({ id: n, name: n }))) as Array<{ id: string; name: string }>;
+  const PROJECT_TYPES: ProjectType[] = rawProjCats.map(c => c.name);
+
   const [activeProject, setActiveProject] = useState<ProjectCard | null>(null);
   const [search, setSearch] = useUrlState("search", "");
   const [typeParam, setTypeParam] = useUrlState("type", "");
-  const typeFilter: ProjectType | null = (typeParam && ["วิชาการ", "หลักสูตร", "สัมมนา", "IT", "งบประมาณ"].includes(typeParam) ? typeParam : null) as ProjectType | null;
+  const typeFilter: ProjectType | null = (typeParam && PROJECT_TYPES.includes(typeParam) ? typeParam : null) as ProjectType | null;
   const setTypeFilter = (t: ProjectType | null) => setTypeParam(t ?? "");
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ProjectCard | null>(null);
@@ -439,8 +449,8 @@ export default function ProjectsPage() {
         )}</DragOverlay>
       </DndContext>
 
-      <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} onSave={handleCreate} />
-      <ProjectFormModal key={editTarget?.id ?? "create"} open={!!editTarget} onClose={() => setEditTarget(null)} onSave={handleEdit} edit={editTarget ?? undefined} />
+      <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} onSave={handleCreate} projectTypes={PROJECT_TYPES} />
+      <ProjectFormModal key={editTarget?.id ?? "create"} open={!!editTarget} onClose={() => setEditTarget(null)} onSave={handleEdit} edit={editTarget ?? undefined} projectTypes={PROJECT_TYPES} />
       <ApproveModal open={approveOpen} onClose={() => setApproveOpen(false)} onAction={handleApprove} project={approveTarget} />
       <RejectModal open={rejectOpen} onClose={() => setRejectOpen(false)} onAction={handleReject} project={approveTarget} />
       <ConfirmDialog

@@ -54,12 +54,12 @@ async function main(): Promise<void> {
   const passwordHash = await bcrypt.hash("TuLaw@2026!", 12);
 
   const usersData = [
-    { email: "admin@tulaw.ac.th", firstNameTh: "ผู้ดูแล", lastNameTh: "ระบบ", roleCode: "super_admin" },
-    { email: "sysadmin@tulaw.ac.th", firstNameTh: "สมชาย", lastNameTh: "ใจดี", roleCode: "system_admin" },
-    { email: "dean@tulaw.ac.th", firstNameTh: "สมศรี", lastNameTh: "รักเรียน", roleCode: "dean" },
-    { email: "deptadmin@tulaw.ac.th", firstNameTh: "วิชัย", lastNameTh: "มั่นคง", roleCode: "dept_admin" },
-    { email: "user@tulaw.ac.th", firstNameTh: "นภา", lastNameTh: "สดใส", roleCode: "user" },
-    { email: "viewer@tulaw.ac.th", firstNameTh: "ธนา", lastNameTh: "ปัญญา", roleCode: "viewer" },
+    { email: "admin@tulaw.ac.th", firstNameTh: "ผู้ดูแล", lastNameTh: "ระบบ", roleCode: "super_admin", authSource: "local" },
+    { email: "sysadmin@tulaw.ac.th", firstNameTh: "สมชาย", lastNameTh: "ใจดี", roleCode: "system_admin", authSource: "ldap" },
+    { email: "dean@tulaw.ac.th", firstNameTh: "สมศรี", lastNameTh: "รักเรียน", roleCode: "dean", authSource: "ldap" },
+    { email: "deptadmin@tulaw.ac.th", firstNameTh: "วิชัย", lastNameTh: "มั่นคง", roleCode: "dept_admin", authSource: "ldap" },
+    { email: "user@tulaw.ac.th", firstNameTh: "นภา", lastNameTh: "สดใส", roleCode: "user", authSource: "ldap" },
+    { email: "viewer@tulaw.ac.th", firstNameTh: "ธนา", lastNameTh: "ปัญญา", roleCode: "viewer", authSource: "ldap" },
   ];
 
   for (const u of usersData) {
@@ -73,6 +73,7 @@ async function main(): Promise<void> {
         departmentId: dept.id,
         passwordHash,
         status: UserStatus.ACTIVE,
+        authSource: u.authSource,
       },
     });
     console.log(`✅ User: ${u.email} (${u.firstNameTh} ${u.lastNameTh})`);
@@ -92,7 +93,47 @@ async function main(): Promise<void> {
   }
 
   // ==============================================================================
-  // 4. Dashboard Demo Data — 3 ฝ่าย + ผู้ใช้ + ประกาศ + การจอง + เอกสาร + โครงการ
+  // 4. Application Categories + Applications (for App Status in Settings & Hub)
+  // ==============================================================================
+  const appCats: Array<{ name: string }> = [
+    { name: "ERP" },
+    { name: "E-Office" },
+    { name: "Document" },
+    { name: "Academic" },
+    { name: "HR" },
+  ];
+
+  const catMap: Record<string, number> = {};
+  for (const cat of appCats) {
+    const c = await prisma.applicationCategory.upsert({
+      where: { id: appCats.indexOf(cat) + 1 },
+      update: { name: cat.name },
+      create: { id: appCats.indexOf(cat) + 1, name: cat.name },
+    });
+    catMap[cat.name] = c.id;
+  }
+  console.log(`✅ Application Categories: 5 รายการ`);
+
+  const hubApps: Array<{ name: string; category: string }> = [
+    { name: "ERP", category: "ERP" },
+    { name: "E-Office", category: "E-Office" },
+    { name: "จัดการเอกสาร", category: "Document" },
+    { name: "งานวิชาการ", category: "Academic" },
+    { name: "งานบุคคล", category: "HR" },
+  ];
+
+  for (const app of hubApps) {
+    const existing = await prisma.application.findFirst({ where: { name: app.name, deletedAt: null } });
+    if (!existing) {
+      await prisma.application.create({
+        data: { name: app.name, categoryId: catMap[app.category], status: "online" },
+      });
+    }
+  }
+  console.log(`✅ Applications: 5 รายการ (online)`);
+
+  // ==============================================================================
+  // 5. Dashboard Demo Data — 3 ฝ่าย + ผู้ใช้ + ประกาศ + การจอง + เอกสาร + โครงการ
   // ==============================================================================
   const itDept = await prisma.department.upsert({
     where: { id: 2 },
@@ -348,6 +389,185 @@ async function main(): Promise<void> {
   } catch (e: unknown) {
     console.log(`⚠ Demo data partial: ${(e as Error)?.message?.slice(0, 80) ?? 'unknown'}... continuing`);
   }
+
+  // ==============================================================================
+  // 6. Permissions — all 69 permission codes
+  // ==============================================================================
+  const permissionCodes: Array<{ code: string; nameTh: string; groupName: string }> = [
+    // Dashboard
+    { code: "DASHBOARD_VIEW", nameTh: "ดูแดชบอร์ด", groupName: "dashboard" },
+    { code: "DASHBOARD_MANAGE", nameTh: "จัดการแดชบอร์ด", groupName: "dashboard" },
+    // Application Hub
+    { code: "APPLICATION_HUB_VIEW", nameTh: "ดูศูนย์กลางแอปพลิเคชัน", groupName: "application_hub" },
+    { code: "APPLICATION_HUB_MANAGE", nameTh: "จัดการศูนย์กลางแอปพลิเคชัน", groupName: "application_hub" },
+    { code: "APPLICATION_HUB_PIN", nameTh: "ปักหมุดแอปพลิเคชัน", groupName: "application_hub" },
+    // Intranet
+    { code: "INTRANET_VIEW", nameTh: "ดูอินทราเน็ต", groupName: "intranet" },
+    { code: "INTRANET_CREATE", nameTh: "สร้างประกาศ", groupName: "intranet" },
+    { code: "INTRANET_EDIT", nameTh: "แก้ไขประกาศ", groupName: "intranet" },
+    { code: "INTRANET_DELETE", nameTh: "ลบประกาศ", groupName: "intranet" },
+    { code: "INTRANET_PUBLISH", nameTh: "เผยแพร่ประกาศ", groupName: "intranet" },
+    // Book Meeting
+    { code: "BOOK_MEETING_VIEW", nameTh: "ดูการจองห้องประชุม", groupName: "book_meeting" },
+    { code: "BOOK_MEETING_CREATE", nameTh: "จองห้องประชุม", groupName: "book_meeting" },
+    { code: "BOOK_MEETING_EDIT", nameTh: "แก้ไขการจอง", groupName: "book_meeting" },
+    { code: "BOOK_MEETING_DELETE", nameTh: "ลบการจอง", groupName: "book_meeting" },
+    { code: "BOOK_MEETING_APPROVE", nameTh: "อนุมัติการจอง", groupName: "book_meeting" },
+    // Documents
+    { code: "DOCUMENTS_VIEW", nameTh: "ดูเอกสาร", groupName: "documents" },
+    { code: "DOCUMENTS_UPLOAD", nameTh: "อัปโหลดเอกสาร", groupName: "documents" },
+    { code: "DOCUMENTS_EDIT", nameTh: "แก้ไขเอกสาร", groupName: "documents" },
+    { code: "DOCUMENTS_DELETE", nameTh: "ลบเอกสาร", groupName: "documents" },
+    { code: "DOCUMENTS_SHARE", nameTh: "แชร์เอกสาร", groupName: "documents" },
+    { code: "DOCUMENTS_MANAGE_POOL", nameTh: "จัดการพูลเอกสาร", groupName: "documents" },
+    // Projects
+    { code: "PROJECTS_VIEW", nameTh: "ดูโครงการ", groupName: "projects" },
+    { code: "PROJECTS_CREATE", nameTh: "สร้างโครงการ", groupName: "projects" },
+    { code: "PROJECTS_EDIT", nameTh: "แก้ไขโครงการ", groupName: "projects" },
+    { code: "PROJECTS_DELETE", nameTh: "ลบโครงการ", groupName: "projects" },
+    { code: "PROJECTS_APPROVE", nameTh: "อนุมัติโครงการ", groupName: "projects" },
+    { code: "PROJECTS_MANAGE_ALL", nameTh: "จัดการทุกโครงการ", groupName: "projects" },
+    // Users & Roles
+    { code: "USERS_VIEW", nameTh: "ดูผู้ใช้", groupName: "users" },
+    { code: "USERS_CREATE", nameTh: "สร้างผู้ใช้", groupName: "users" },
+    { code: "USERS_EDIT", nameTh: "แก้ไขผู้ใช้", groupName: "users" },
+    { code: "USERS_DELETE", nameTh: "ลบผู้ใช้", groupName: "users" },
+    { code: "USERS_MANAGE_ROLES", nameTh: "จัดการ Role", groupName: "users" },
+    { code: "USERS_MANAGE_PERMISSIONS", nameTh: "จัดการ Permission", groupName: "users" },
+    { code: "USERS_AD_SYNC", nameTh: "ซิงค์ Active Directory", groupName: "users" },
+    { code: "USERS_BULK_IMPORT", nameTh: "นำเข้า CSV", groupName: "users" },
+    // Users & Roles — Bulk Actions (NEW)
+    { code: "USERS_BULK_ASSIGN_ROLE", nameTh: "กำหนด Role หลายรายการ", groupName: "users" },
+    { code: "USERS_BULK_ENABLE", nameTh: "เปิดใช้งานหลายรายการ", groupName: "users" },
+    { code: "USERS_BULK_DISABLE", nameTh: "ปิดใช้งานหลายรายการ", groupName: "users" },
+    { code: "USERS_UNLOCK_ACCOUNT", nameTh: "ปลดล็อกบัญชีผู้ใช้", groupName: "users" },
+    { code: "USERS_RESET_MFA", nameTh: "รีเซ็ต MFA ผู้ใช้", groupName: "users" },
+    { code: "USERS_EXPORT_SELECTED", nameTh: "ส่งออกผู้ใช้ที่เลือก", groupName: "users" },
+    // Audit Log
+    { code: "AUDIT_LOG_VIEW", nameTh: "ดูบันทึกความปลอดภัย", groupName: "audit_log" },
+    { code: "AUDIT_LOG_EXPORT", nameTh: "ส่งออกบันทึก", groupName: "audit_log" },
+    { code: "AUDIT_LOG_MANAGE", nameTh: "จัดการบันทึก", groupName: "audit_log" },
+    // Settings
+    { code: "SETTINGS_VIEW", nameTh: "ดูตั้งค่าระบบ", groupName: "settings" },
+    { code: "SETTINGS_MANAGE", nameTh: "จัดการตั้งค่าระบบ", groupName: "settings" },
+    { code: "SETTINGS_API_KEYS", nameTh: "จัดการ API Keys", groupName: "settings" },
+    { code: "SETTINGS_BRANDING", nameTh: "จัดการแบรนด์", groupName: "settings" },
+    { code: "SETTINGS_NOTIFICATION", nameTh: "จัดการการแจ้งเตือน", groupName: "settings" },
+    { code: "SETTINGS_SSO", nameTh: "จัดการ SSO", groupName: "settings" },
+    // ERP
+    { code: "ERP_VIEW", nameTh: "ดู ERP", groupName: "erp" },
+    { code: "ERP_MANAGE", nameTh: "จัดการ ERP", groupName: "erp" },
+    { code: "ERP_APPROVE", nameTh: "อนุมัติ ERP", groupName: "erp" },
+    { code: "ERP_REPORT", nameTh: "ดูรายงาน ERP", groupName: "erp" },
+    // E-Office
+    { code: "E_OFFICE_VIEW", nameTh: "ดูสารบรรณ", groupName: "e_office" },
+    { code: "E_OFFICE_CREATE", nameTh: "สร้างสารบรรณ", groupName: "e_office" },
+    { code: "E_OFFICE_APPROVE", nameTh: "อนุมัติสารบรรณ", groupName: "e_office" },
+    { code: "E_OFFICE_MANAGE", nameTh: "จัดการสารบรรณ", groupName: "e_office" },
+    // Document Management
+    { code: "DOCUMENT_MANAGEMENT_VIEW", nameTh: "ดูระบบจัดการเอกสาร", groupName: "document_management" },
+    { code: "DOCUMENT_MANAGEMENT_UPLOAD", nameTh: "อัปโหลดเอกสารระบบ", groupName: "document_management" },
+    { code: "DOCUMENT_MANAGEMENT_MANAGE", nameTh: "จัดการระบบเอกสาร", groupName: "document_management" },
+    { code: "DOCUMENT_MANAGEMENT_OCR", nameTh: "ค้นหา OCR", groupName: "document_management" },
+    // Academic
+    { code: "ACADEMIC_VIEW", nameTh: "ดูงานวิชาการ", groupName: "academic" },
+    { code: "ACADEMIC_MANAGE", nameTh: "จัดการงานวิชาการ", groupName: "academic" },
+    { code: "ACADEMIC_EXAM", nameTh: "จัดการสอบ", groupName: "academic" },
+    // HR
+    { code: "HR_VIEW", nameTh: "ดูข้อมูลบุคคล", groupName: "hr" },
+    { code: "HR_MANAGE", nameTh: "จัดการข้อมูลบุคคล", groupName: "hr" },
+    { code: "HR_PAYROLL", nameTh: "ดูเงินเดือน", groupName: "hr" },
+    { code: "HR_ATTENDANCE", nameTh: "ดูเวลาเข้างาน", groupName: "hr" },
+  ];
+
+  const permMap: Record<string, number> = {};
+  let permCount = 0;
+  for (const p of permissionCodes) {
+    const perm = await prisma.permission.upsert({
+      where: { code: p.code },
+      update: { nameTh: p.nameTh, groupName: p.groupName },
+      create: p,
+    });
+    permMap[p.code] = perm.id;
+    permCount++;
+  }
+  console.log(`✅ Permissions: ${permCount} รายการ`);
+
+  // ==============================================================================
+  // 6. Role-Permission Mappings
+  // ==============================================================================
+  const rolePermissionMap: Record<string, string[]> = {
+    super_admin: permissionCodes.map(p => p.code),
+    system_admin: permissionCodes.map(p => p.code),
+    dean: [
+      "DASHBOARD_VIEW", "DASHBOARD_MANAGE",
+      "APPLICATION_HUB_VIEW", "APPLICATION_HUB_MANAGE", "APPLICATION_HUB_PIN",
+      "INTRANET_VIEW", "INTRANET_CREATE", "INTRANET_EDIT", "INTRANET_PUBLISH",
+      "BOOK_MEETING_VIEW", "BOOK_MEETING_CREATE", "BOOK_MEETING_APPROVE",
+      "DOCUMENTS_VIEW", "DOCUMENTS_UPLOAD", "DOCUMENTS_EDIT",
+      "PROJECTS_VIEW", "PROJECTS_APPROVE",
+      "USERS_VIEW",
+      "AUDIT_LOG_VIEW", "AUDIT_LOG_EXPORT",
+      "ERP_VIEW", "ERP_MANAGE", "ERP_APPROVE", "ERP_REPORT",
+      "E_OFFICE_VIEW", "E_OFFICE_CREATE", "E_OFFICE_APPROVE", "E_OFFICE_MANAGE",
+      "DOCUMENT_MANAGEMENT_VIEW", "DOCUMENT_MANAGEMENT_UPLOAD", "DOCUMENT_MANAGEMENT_MANAGE", "DOCUMENT_MANAGEMENT_OCR",
+      "ACADEMIC_VIEW", "ACADEMIC_MANAGE", "ACADEMIC_EXAM",
+      "HR_VIEW", "HR_ATTENDANCE",
+    ],
+    dept_admin: [
+      "DASHBOARD_VIEW", "DASHBOARD_MANAGE",
+      "APPLICATION_HUB_VIEW", "APPLICATION_HUB_MANAGE", "APPLICATION_HUB_PIN",
+      "INTRANET_VIEW", "INTRANET_CREATE", "INTRANET_EDIT", "INTRANET_DELETE", "INTRANET_PUBLISH",
+      "BOOK_MEETING_VIEW", "BOOK_MEETING_CREATE", "BOOK_MEETING_EDIT", "BOOK_MEETING_DELETE", "BOOK_MEETING_APPROVE",
+      "DOCUMENTS_VIEW", "DOCUMENTS_UPLOAD", "DOCUMENTS_EDIT", "DOCUMENTS_DELETE", "DOCUMENTS_SHARE", "DOCUMENTS_MANAGE_POOL",
+      "PROJECTS_VIEW", "PROJECTS_CREATE", "PROJECTS_EDIT", "PROJECTS_DELETE", "PROJECTS_APPROVE",
+      "USERS_VIEW", "USERS_CREATE", "USERS_EDIT",
+      "USERS_BULK_ASSIGN_ROLE", "USERS_BULK_ENABLE", "USERS_BULK_DISABLE", "USERS_UNLOCK_ACCOUNT", "USERS_RESET_MFA",
+      "AUDIT_LOG_VIEW", "AUDIT_LOG_EXPORT",
+      "ERP_VIEW", "ERP_MANAGE", "ERP_REPORT",
+      "E_OFFICE_VIEW", "E_OFFICE_CREATE", "E_OFFICE_APPROVE", "E_OFFICE_MANAGE",
+      "DOCUMENT_MANAGEMENT_VIEW", "DOCUMENT_MANAGEMENT_UPLOAD", "DOCUMENT_MANAGEMENT_MANAGE",
+      "ACADEMIC_VIEW", "ACADEMIC_MANAGE", "ACADEMIC_EXAM",
+      "HR_VIEW", "HR_MANAGE", "HR_ATTENDANCE",
+    ],
+    user: [
+      "DASHBOARD_VIEW", "DASHBOARD_MANAGE",
+      "APPLICATION_HUB_VIEW", "APPLICATION_HUB_MANAGE", "APPLICATION_HUB_PIN",
+      "INTRANET_VIEW", "INTRANET_CREATE", "INTRANET_EDIT", "INTRANET_DELETE",
+      "BOOK_MEETING_VIEW", "BOOK_MEETING_CREATE", "BOOK_MEETING_DELETE",
+      "DOCUMENTS_VIEW", "DOCUMENTS_UPLOAD", "DOCUMENTS_DELETE",
+      "PROJECTS_VIEW", "PROJECTS_CREATE", "PROJECTS_EDIT",
+      "ERP_VIEW",
+      "E_OFFICE_VIEW", "E_OFFICE_CREATE",
+      "DOCUMENT_MANAGEMENT_VIEW", "DOCUMENT_MANAGEMENT_UPLOAD", "DOCUMENT_MANAGEMENT_OCR",
+      "ACADEMIC_VIEW",
+      "HR_VIEW",
+    ],
+    viewer: [
+      "DASHBOARD_VIEW",
+      "APPLICATION_HUB_VIEW",
+      "INTRANET_VIEW",
+      "BOOK_MEETING_VIEW",
+      "DOCUMENTS_VIEW",
+      "PROJECTS_VIEW",
+    ],
+  };
+
+  let rpCount = 0;
+  for (const [roleCode, permissions] of Object.entries(rolePermissionMap)) {
+    const roleId = roleMap[roleCode];
+    for (const permCode of permissions) {
+      const permId = permMap[permCode];
+      if (!permId) continue;
+      await prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId, permissionId: permId } },
+        update: {},
+        create: { roleId, permissionId: permId },
+      });
+      rpCount++;
+    }
+  }
+  console.log(`✅ RolePermissions: ${rpCount} รายการ`);
 
   console.log("\n🎉 Seeding complete!");
 }

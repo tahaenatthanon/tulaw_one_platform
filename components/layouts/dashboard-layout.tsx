@@ -4,6 +4,8 @@ import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import useSWR from "swr";
+import { swrFetcher } from "@/lib/fetcher";
 import {
   LayoutDashboard,
   Grid3X3,
@@ -95,20 +97,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
+  // Fetch system branding (name) from settings API
+  const { data: settingsData } = useSWR("/api/settings", swrFetcher);
+  const branding = (settingsData as Record<string, Record<string, unknown>> | undefined)?.branding as Record<string, string> | undefined;
+  const systemName = branding?.name || "TULAW ONE";
+
+  // Update document title to reflect branding
+  useEffect(() => {
+    if (branding?.name) {
+      document.title = `${branding.name} — คณะนิติศาสตร์ มหาวิทยาลัยธรรมศาสตร์`;
+    }
+  }, [branding?.name]);
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* ─── Left Sidebar ─── */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex flex-col bg-tu-primary-active text-white transition-all duration-200 lg:static",
-          sidebarCollapsed ? "lg:w-[68px]" : "lg:w-64",
-          !sidebarCollapsed ? "w-64" : "w-[68px]",
+          sidebarCollapsed ? "lg:w-[68px]" : "lg:w-[220px]",
+          !sidebarCollapsed ? "w-[220px]" : "w-[68px]",
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         {/* Logo */}
         <div className={cn("flex h-16 items-center border-b border-white/10 px-3", sidebarCollapsed ? "justify-center" : "gap-3 px-5")}>
-          <TooltipWrapper show={sidebarCollapsed} label="TULAW ONE">
+          <TooltipWrapper show={sidebarCollapsed} label={systemName}>
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-tu-secondary">
               <span className="text-tu-text-primary font-bold text-sm">มธ</span>
             </div>
@@ -116,7 +130,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {!sidebarCollapsed && (
             <>
               <div className="min-w-0">
-                <p className="text-sm font-semibold leading-tight truncate">TULAW ONE</p>
+                <p className="text-sm font-semibold leading-tight truncate">{systemName}</p>
                 <p className="text-[10px] text-white/60 leading-tight">Faculty of Law, TU</p>
               </div>
               <button className="ml-auto lg:hidden text-white/70 hover:text-white" onClick={() => setSidebarOpen(false)}>

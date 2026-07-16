@@ -45,15 +45,14 @@ const TABS: { id: TabId; label: string; icon: typeof Newspaper }[] = [
   { id: "contacts", label: "ติดต่อหน่วยงาน", icon: Building2 },
 ];
 
-const CATEGORIES = [
-  { key: "ทั้งหมด", label: "ทั้งหมด", color: "bg-tu-primary", text: "text-tu-primary", border: "border-tu-primary", icon: Newspaper },
-  { key: "ประกาศด่วน", label: "ด่วน", color: "bg-tu-error", text: "text-tu-error", border: "border-tu-error", icon: AlertTriangle },
-  { key: "เชิญชวน", label: "เชิญชวน", color: "bg-tu-warning", text: "text-tu-warning", border: "border-tu-warning", icon: Megaphone },
-  { key: "ประกาศผล", label: "ประกาศผล", color: "bg-tu-info", text: "text-tu-info", border: "border-tu-info", icon: ScrollText },
-  { key: "นโยบาย", label: "นโยบาย", color: "bg-tu-secondary-active", text: "text-tu-secondary-active", border: "border-tu-secondary-active", icon: Vote },
+const DEFAULT_ANN_CATS = [
+  { id: "a1", name: "ประกาศด่วน", color: "#DC2626" },
+  { id: "a2", name: "เชิญชวน", color: "#F59E0B" },
+  { id: "a3", name: "ประกาศผล", color: "#2563EB" },
+  { id: "a4", name: "นโยบาย", color: "#7C3AED" },
 ];
 
-const SUBSCRIBE_CATS = CATEGORIES.filter(c => c.key !== "ทั้งหมด");
+type CategoryDef = { key: string; label: string; color: string; text: string; border: string; icon: typeof Newspaper };
 
 const MOCK_DEPARTMENTS: Department[] = [
   { name: "สำนักงานคณะนิติศาสตร์", phone: "02-613-2101", email: "law@tu.ac.th", location: "อาคารคณะนิติศาสตร์ ชั้น 1" },
@@ -105,10 +104,10 @@ const ORG_STATS = [
    Edit Announcement Modal
    ============================================================================== */
 
-function EditModal({ open, onClose, onSave, ann }: {
+function EditModal({ open, onClose, onSave, ann, categories }: {
   open: boolean; onClose: () => void;
   onSave: (id: string, title: string, content: string, category: string) => void;
-  ann: Announcement | null;
+  ann: Announcement | null; categories: CategoryDef[];
 }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -162,13 +161,13 @@ function EditModal({ open, onClose, onSave, ann }: {
             <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">หมวดหมู่ <span className="text-tu-error">*</span></label>
             <button onClick={() => setDdOpen(!ddOpen)} className="w-full flex items-center justify-between rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors">
               <span className="flex items-center gap-2">
-                {(() => { const c = CATEGORIES.find(x => x.key === cat) ?? CATEGORIES[1]; const I = c.icon; return <><I size={14} className={c.text} /><span className="text-tu-text-primary">{cat}</span></>; })()}
+                {(() => { const c = categories.find(x => x.key === cat) ?? categories[1]; const I = c.icon; return <><I size={14} className={c.text} /><span className="text-tu-text-primary">{cat}</span></>; })()}
               </span>
               <span className="text-tu-text-muted text-xs">▾</span>
             </button>
             {ddOpen && (
               <div className="absolute top-full mt-1 w-full bg-tu-surface border border-tu-border rounded-lg shadow-lg z-10 py-1">
-                {CATEGORIES.filter(c => c.key !== "ทั้งหมด").map(c => (
+                {categories.filter(c => c.key !== "ทั้งหมด").map(c => (
                   <button key={c.key} onClick={() => { setCat(c.key); setDdOpen(false); }} className={cn("w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors", cat === c.key && "bg-tu-primary-soft")}>
                     <c.icon size={14} className={c.text} /><span className="text-tu-text-primary">{c.key}</span>
                   </button>
@@ -190,9 +189,10 @@ function EditModal({ open, onClose, onSave, ann }: {
    Create Announcement Modal
    ============================================================================== */
 
-function CreateModal({ open, onClose, onCreate }: {
+function CreateModal({ open, onClose, onCreate, categories }: {
   open: boolean; onClose: () => void;
   onCreate: (title: string, content: string, category: string) => void;
+  categories: CategoryDef[];
 }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -244,13 +244,13 @@ function CreateModal({ open, onClose, onCreate }: {
             <label className="block text-xs font-medium text-tu-text-secondary mb-1.5">หมวดหมู่ <span className="text-tu-error">*</span></label>
             <button onClick={() => setDdOpen(!ddOpen)} className="w-full flex items-center justify-between rounded-[--radius-input] border border-tu-border bg-tu-surface px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors">
               <span className="flex items-center gap-2">
-                {(() => { const c = CATEGORIES.find(x => x.key === cat) ?? CATEGORIES[1]; const I = c.icon; return <><I size={14} className={c.text} /><span className="text-tu-text-primary">{cat}</span></>; })()}
+                {(() => { const c = categories.find(x => x.key === cat) ?? categories[1]; const I = c.icon; return <><I size={14} className={c.text} /><span className="text-tu-text-primary">{cat}</span></>; })()}
               </span>
               <span className="text-tu-text-muted text-xs">▾</span>
             </button>
             {ddOpen && (
               <div className="absolute top-full mt-1 w-full bg-tu-surface border border-tu-border rounded-lg shadow-lg z-10 py-1">
-                {CATEGORIES.filter(c => c.key !== "ทั้งหมด").map(c => (
+                {categories.filter(c => c.key !== "ทั้งหมด").map(c => (
                   <button key={c.key} onClick={() => { setCat(c.key); setDdOpen(false); }} className={cn("w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-tu-surface-hover transition-colors", cat === c.key && "bg-tu-primary-soft")}>
                     <c.icon size={14} className={c.text} /><span className="text-tu-text-primary">{c.key}</span>
                   </button>
@@ -463,9 +463,9 @@ function EventEditModal({ open, onClose, onSave, event }: {
    Detail Modal
    ============================================================================== */
 
-function DetailModal({ ann, open, onClose }: { ann: Announcement | null; open: boolean; onClose: () => void }) {
+function DetailModal({ ann, open, onClose, categories }: { ann: Announcement | null; open: boolean; onClose: () => void; categories: CategoryDef[] }) {
   if (!open || !ann) return null;
-  const cat = CATEGORIES.find(c => c.key === ann.category) ?? CATEGORIES[0];
+  const cat = categories.find(c => c.key === ann.category) ?? categories[0];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="bg-tu-surface rounded-[--radius-dialog] border border-tu-border shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -495,7 +495,7 @@ function DetailModal({ ann, open, onClose }: { ann: Announcement | null; open: b
    Announcements Tab
    ============================================================================== */
 
-function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, currentUserId, onMutate }: { announcements: Announcement[]; canCreate: boolean; canEdit: boolean; canDelete: boolean; currentUserId: string; onMutate: () => void }) {
+function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, currentUserId, onMutate, categories, subscribeCats }: { announcements: Announcement[]; canCreate: boolean; canEdit: boolean; canDelete: boolean; currentUserId: string; onMutate: () => void; categories: CategoryDef[]; subscribeCats: CategoryDef[] }) {
   const [selectedFilter, setSelectedFilter] = useUrlState("filter", "ทั้งหมด");
   const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
   const [subLoading, setSubLoading] = useState(false);
@@ -569,7 +569,7 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
           <span className="text-sm font-semibold text-tu-text-primary">Subscribe:</span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {SUBSCRIBE_CATS.map(c => (
+          {subscribeCats.map(c => (
             <button key={c.key} onClick={() => handleSubscribe(c.key)}
               className={cn("flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors",
                 subscribed.has(c.key) ? `${c.text} ${c.border} bg-tu-surface` : "border-tu-border text-tu-text-muted hover:border-tu-text-secondary")}>
@@ -582,7 +582,7 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
       {/* Filter bar + Create button in one row */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map(c => (
+          {categories.map(c => (
             <button key={c.key} onClick={() => setSelectedFilter(c.key)}
               className={cn("flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors",
                 selectedFilter === c.key ? `${c.text} ${c.border} bg-tu-surface` : "border-tu-border text-tu-text-muted hover:border-tu-text-secondary")}>
@@ -607,7 +607,7 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
         {filtered.length === 0 ? (
           <div className="text-center py-12 text-tu-text-muted"><Newspaper size={40} className="mx-auto mb-3 opacity-20" /><p>ไม่พบประกาศ</p></div>
         ) : filtered.map(ann => {
-          const cat = CATEGORIES.find(c => c.key === ann.category) ?? CATEGORIES[0];
+          const cat = categories.find(c => c.key === ann.category) ?? categories[0];
           return (
             <div key={ann.id} onClick={() => setDetailAnn(ann)} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 hover:shadow-md transition-shadow cursor-pointer group">
               <div className="flex items-center gap-3">
@@ -642,9 +642,9 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
         })}
       </div>
 
-      <CreateModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={handleCreate} />
-      <EditModal open={editModalOpen} onClose={() => setEditModalOpen(false)} onSave={handleEditSave} ann={editAnn} />
-      <DetailModal ann={detailAnn} open={!!detailAnn} onClose={() => setDetailAnn(null)} />
+      <CreateModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={handleCreate} categories={categories} />
+      <EditModal open={editModalOpen} onClose={() => setEditModalOpen(false)} onSave={handleEditSave} ann={editAnn} categories={categories} />
+      <DetailModal ann={detailAnn} open={!!detailAnn} onClose={() => setDetailAnn(null)} categories={categories} />
       <ConfirmDialog
         open={!!deleteTarget}
         title="ยืนยันลบประกาศ"
@@ -874,6 +874,25 @@ export default function IntranetPage() {
   const { data: apiAnnouncements, isLoading: annLoading, mutate: mutateAnns } = useSWR("/api/announcements", swrFetcher);
   const announcements: Announcement[] = Array.isArray(apiAnnouncements) ? apiAnnouncements : [];
 
+  // Fetch announcement categories from System Settings API
+  const { data: settingsData } = useSWR("/api/settings", swrFetcher);
+  const settings = (settingsData || {}) as Record<string, Record<string, unknown>>;
+  const storageSection = (settings.storage || {}) as Record<string, unknown>;
+  const rawAnnCats: Array<{ id: string; name: string; color: string }> =
+    (Array.isArray(storageSection.annCats) ? storageSection.annCats : DEFAULT_ANN_CATS) as Array<{ id: string; name: string; color: string }>;
+
+  // Update module-level categories from API data
+  const categories: CategoryDef[] = [
+    { key: "ทั้งหมด", label: "ทั้งหมด", color: "bg-tu-primary", text: "text-tu-primary", border: "border-tu-primary", icon: Newspaper },
+    ...rawAnnCats.map(c => ({
+      key: c.name,
+      label: c.name,
+      color: `bg-tu-primary`, text: `text-tu-primary`, border: `border-tu-primary`,
+      icon: Megaphone,
+    })),
+  ];
+  const SUBSCRIBE_CATS = categories.filter(c => c.key !== "ทั้งหมด");
+
   // Fetch org stats from API
   const { data: apiStats } = useSWR("/api/intranet/stats", swrFetcher<Record<string, number>>);
   const orgStats = apiStats
@@ -927,9 +946,10 @@ export default function IntranetPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "announcements" && <AnnouncementsTab announcements={announcements} canCreate={canCreate} canEdit={canEdit} canDelete={canDelete} currentUserId={currentUserId} onMutate={mutateAnns} />}
+      {activeTab === "announcements" && <AnnouncementsTab announcements={announcements} canCreate={canCreate} canEdit={canEdit} canDelete={canDelete} currentUserId={currentUserId} onMutate={mutateAnns} categories={categories} subscribeCats={SUBSCRIBE_CATS} />}
       {activeTab === "calendar" && <CalendarTab canEdit={canEdit} canDelete={canDelete} />}
       {activeTab === "contacts" && <ContactsTab departments={departments} />}
     </div>
   );
 }
+

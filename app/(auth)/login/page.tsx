@@ -7,6 +7,8 @@ import {
   EyeOff,
   LogIn,
   Sparkles,
+  Shield,
+  Key,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +28,13 @@ function LoginPageContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // MFA states
+  const [mfaStep, setMfaStep] = useState<"password" | "otp" | "backup">("password");
+  const [otp, setOtp] = useState("");
+  const [backupCode, setBackupCode] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaEnabled, setMfaEnabled] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,8 +62,40 @@ function LoginPageContent() {
 
       if (res.ok) {
         const data = await res.json();
-        // Hard navigation ensures the Set-Cookie session token
-        // is sent with the next request
+
+        // Check MFA status from session
+        try {
+          const sessionRes = await fetch("/api/auth/session");
+          const sessionData = await sessionRes.json();
+          const userMfaVerified = sessionData?.user?.mfaVerified;
+          const userRoles: string[] = sessionData?.user?.roles ?? [];
+
+          // Check if user needs MFA (System Admin+)
+          const isAdmin = userRoles.some((r) => r === "super_admin" || r === "system_admin");
+          if (isAdmin) {
+            setMfaRequired(true);
+            // Check if MFA is set up
+            const mfaRes = await fetch("/api/mfa", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "check" }),
+            });
+            const mfaData = await mfaRes.json();
+            if (mfaData.success && mfaData.data.enabled) {
+              setMfaEnabled(true);
+              setMfaStep("otp");
+              setLoading(false);
+              return;
+            }
+            // MFA not enabled — redirect to setup
+            window.location.href = "/settings/mfa-setup";
+            return;
+          }
+        } catch {
+          // Fall through to normal redirect
+        }
+
+        // Normal login — redirect to dashboard
         window.location.href = data.url || callbackUrl;
       } else {
         const text = await res.text();
@@ -70,6 +111,44 @@ function LoginPageContent() {
       const message =
         err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง";
       setError(message);
+      setLoading(false);
+    }
+  }
+
+  async function verifyOtp() {
+    if (otp.length !== 6) return;
+    setError("");
+    setLoading(true);
+    const res = await fetch("/api/mfa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "verify-login", otp }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      window.location.href = callbackUrl;
+    } else {
+      setError(json.error?.message ?? "รหัส OTP ไม่ถูกต้อง");
+      setOtp("");
+      setLoading(false);
+    }
+  }
+
+  async function verifyBackupCodeHandler() {
+    if (!backupCode.trim()) return;
+    setError("");
+    setLoading(true);
+    const res = await fetch("/api/mfa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "verify-backup", backupCode }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      window.location.href = callbackUrl;
+    } else {
+      setError(json.error?.message ?? "Backup Code ไม่ถูกต้อง");
+      setBackupCode("");
       setLoading(false);
     }
   }
@@ -184,7 +263,69 @@ function LoginPageContent() {
               </div>
             )}
 
-            {/* Credentials Form */}
+            {/* MFA OTP Step */}
+            {mfaStep === "otp" && (
+              <div className="space-y-4">
+                <div className="text-center">
+                  <div className="flex justify-center mb-3">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-tu-primary-soft">
+                      <Shield size={28} className="text-tu-primary" />
+                    </div>
+                  </div>
+                  <h3 className="text-sm font-semibold text-tu-text-primary">ยืนยันตัวตนด้วย MFA</h3>
+                  <p className="text-xs text-tu-text-muted mt-1">กรอกรหัส 6 หลักจากแอป Authenticator</p>
+                </div>
+                <Input
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="000000"
+                  className="text-center text-2xl tracking-[0.5em] font-mono"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter") void verifyOtp(); }}
+                />
+                <Button onClick={verifyOtp} disabled={otp.length !== 6 || loading} className="w-full gap-2 h-11">
+                  {loading ? "กำลังตรวจสอบ..." : <><Shield size={18} />ยืนยัน</>}
+                </Button>
+                <button type="button" onClick={() => setMfaStep("backup")} className="text-xs text-tu-primary hover:underline w-full text-center">
+                  ใช้ Backup Code แทน
+                </button>
+              </div>
+            )}
+
+            {/* MFA Backup Code Step */}
+            {mfaStep === "backup" && (
+              <div className="space-y-4">
+                <div className="text-center">
+                  <div className="flex justify-center mb-3">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-tu-secondary-soft">
+                      <Key size={28} className="text-tu-secondary" />
+                    </div>
+                  </div>
+                  <h3 className="text-sm font-semibold text-tu-text-primary">ใช้ Backup Code</h3>
+                  <p className="text-xs text-tu-text-muted mt-1">กรอก Backup Code 10 หลักที่บันทึกไว้</p>
+                </div>
+                <Input
+                  type="text"
+                  value={backupCode}
+                  onChange={(e) => setBackupCode(e.target.value.trim().toLowerCase())}
+                  placeholder="xxxxxxxxxx"
+                  className="text-center font-mono"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter") void verifyBackupCodeHandler(); }}
+                />
+                <Button onClick={verifyBackupCodeHandler} disabled={!backupCode.trim() || loading} className="w-full gap-2 h-11">
+                  {loading ? "กำลังตรวจสอบ..." : <><Key size={18} />ยืนยัน</>}
+                </Button>
+                <button type="button" onClick={() => { setMfaStep("otp"); setError(""); }} className="text-xs text-tu-primary hover:underline w-full text-center">
+                  ← กลับไปกรอก OTP
+                </button>
+              </div>
+            )}
+
+            {/* Password Form */}
+            {mfaStep === "password" && (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label
@@ -255,6 +396,7 @@ function LoginPageContent() {
                 )}
               </Button>
             </form>
+            )}
 
             {/* Divider */}
             <div className="relative my-5">

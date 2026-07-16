@@ -83,10 +83,34 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.roles = (user as { roles?: string[] }).roles ?? [];
         token.departmentId = (user as { departmentId?: number }).departmentId ?? null;
+        token.mfaVerified = (user as { mfaVerified?: boolean }).mfaVerified ?? false;
+
+        // Check MFA status from DB for admin users
+        const { ROLE_LEVELS } = await import("@/lib/permissions");
+        const highestLevel = Math.max(
+          0,
+          ...((token.roles as string[]) ?? []).map(
+            (r) => ROLE_LEVELS[r as "super_admin" | "system_admin" | "dean" | "dept_admin" | "user" | "viewer"] ?? 0
+          )
+        );
+        if (highestLevel >= 80 && !token.mfaVerified) {
+          try {
+            const { prisma } = await import("@/lib/prisma");
+            const mfa = await prisma.userMfa.findFirst({
+              where: { userId: token.id as string },
+            });
+            token.mfaVerified = Boolean(mfa?.isEnabled);
+          } catch {
+            token.mfaVerified = false;
+          }
+        } else {
+          token.mfaVerified = true;
+        }
       }
       // Google OAuth — assign viewer role for first-time Google users
       if (account?.provider === "google" && !token.roles) {
         token.roles = ["user"];
+        token.mfaVerified = true;
       }
       return token;
     },
@@ -97,6 +121,8 @@ export const authOptions: NextAuthOptions = {
           (token.roles as string[]) ?? [];
         (session.user as { departmentId: number | null }).departmentId =
           (token.departmentId as number | null) ?? null;
+        (session.user as { mfaVerified?: boolean }).mfaVerified =
+          token.mfaVerified as boolean | undefined;
       }
       return session;
     },
