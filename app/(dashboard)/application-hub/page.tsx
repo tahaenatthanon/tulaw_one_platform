@@ -18,6 +18,10 @@ interface AppGroup {
 
 type AppStatus = "online" | "maintenance" | "offline";
 
+interface AppWithStatus extends AppGroup {
+  status: AppStatus;
+}
+
 const appGroups: AppGroup[] = [
   { id: "erp", name: "ERP", description: "ระบบบริหารทรัพยากรองค์กร", icon: Calculator, userCount: 45 },
   { id: "e-office", name: "E-Office", description: "ระบบสารบรรณอิเล็กทรอนิกส์", icon: FileText, userCount: 62 },
@@ -56,13 +60,13 @@ export default function ApplicationHubPage() {
   );
 
   // Merge appGroups with real status from API — fallback to "online" if not loaded
-  const apps = appGroups.map(a => ({
+  const apps: AppWithStatus[] = appGroups.map(a => ({
     ...a,
     status: (statusMap.get(a.name) as AppStatus) || "online",
   }));
 
-  const visibleApps = apps.filter((a) => canView[a.id as keyof typeof canView]);
-  const filtered = visibleApps.filter((a) =>
+  const visibleApps: AppWithStatus[] = apps.filter((a) => canView[a.id as keyof typeof canView]);
+  const filtered: AppWithStatus[] = visibleApps.filter((a) =>
     search === "" || a.name.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase())
   );
   const pinnedApps = filtered.filter((a) => pinnedIds.has(a.id));
@@ -121,10 +125,6 @@ export default function ApplicationHubPage() {
       </div>
     </div>
   );
-}
-
-interface AppWithStatus extends AppGroup {
-  status: AppStatus;
 }
 
 /* ==============================================================================
