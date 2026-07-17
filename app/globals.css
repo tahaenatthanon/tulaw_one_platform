@@ -7,32 +7,27 @@
 
 :root {
   /* ─── Brand Tokens ─── */
-  --tu-primary: #A31D1D;
-  --tu-primary-hover: #850000;
-  --tu-primary-active: #710000;
-  --tu-primary-soft: #df5959;
+--tu-primary: #A31D1D;
+--tu-primary-hover: #850000;
+--tu-primary-active: #710000;
 
-  --tu-secondary:        #FDB813;
-  --tu-secondary-hover:  #E5A800;
-  --tu-secondary-active: #C99200;
-  --tu-secondary-soft:   #FFF7DE;
+--tu-secondary: #FDB813;
+--tu-secondary-soft: #FEF3D4;
+--tu-secondary-active: #C89100;
 
-  /* ─── Semantic Tokens ─── */
-  --tu-bg:            #F8F9FA;
-  --tu-surface:       #FFFFFF;
-  --tu-surface-hover: #F1F3F5;
-  --tu-border:        #DEE2E6;
-  --tu-border-focus:  #A31D1D;
-  --tu-text-primary:   #212529;
-  --tu-text-secondary: #495057;
-  --tu-text-muted:     #868E96;
-  --tu-text-inverse:   #FFFFFF;
+--tu-border: #E5E7EB;
+
+--tu-text-primary: #0F172A;
+--tu-text-secondary: #334155;
+--tu-text-muted: #64748B;
+
+--tu-surface-hover: #F8FAFC;
 
   /* ─── Status Colors ─── */
-  --tu-success: #2D8A4E;
-  --tu-warning: #E8A317;
-  --tu-error:   #DC3545;
-  --tu-info:    #2F6D91;
+  --tu-success: #16A34A;
+  --tu-warning: #D97706;
+  --tu-error:   #DC2626;
+  --tu-info:    #2563EB;
 
   /* ─── Typography ─── */
   --font-prompt: var(--font-prompt), 'Inter', system-ui, sans-serif;
@@ -73,6 +68,14 @@
   --font-sans: var(--font-prompt);
 }
 
+@keyframes tu-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-tu-fade-in {
+  animation: tu-fade-in 0.6s ease-out both;
+}
+
 /* ─── Base Styles ─── */
 body {
   background: var(--tu-bg);
@@ -96,3 +99,4 @@ body {
   outline: 2px solid var(--tu-border-focus);
   outline-offset: 2px;
 }
+

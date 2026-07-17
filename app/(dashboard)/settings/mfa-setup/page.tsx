@@ -179,7 +179,6 @@ export default function MfaSetupPage() {
             placeholder="000000"
             maxLength={6}
             className="text-center text-2xl tracking-[0.5em] font-mono"
-            autoComplete="one-time-code"
           />
           <Button onClick={verifySetup} disabled={code.length !== 6 || loading}>
             {loading ? <RefreshCw size={18} className="animate-spin" /> : null}
