@@ -13,7 +13,6 @@ import { useUrlState } from "@/hooks/use-url-state";
 
 interface AppGroup {
   id: string; name: string; description: string; icon: React.ElementType;
-  userCount: number;
 }
 
 type AppStatus = "online" | "maintenance" | "offline";
@@ -23,12 +22,32 @@ interface AppWithStatus extends AppGroup {
 }
 
 const appGroups: AppGroup[] = [
-  { id: "erp", name: "ERP", description: "ระบบบริหารทรัพยากรองค์กร", icon: Calculator, userCount: 45 },
-  { id: "e-office", name: "E-Office", description: "ระบบสารบรรณอิเล็กทรอนิกส์", icon: FileText, userCount: 62 },
-  { id: "document-management", name: "จัดการเอกสาร", description: "ระบบจัดการเอกสาร", icon: FolderSearch, userCount: 78 },
-  { id: "academic", name: "งานวิชาการ", description: "ระบบงานวิชาการ", icon: GraduationCap, userCount: 34 },
-  { id: "hr", name: "งานบุคคล", description: "ระบบบริหารทรัพยากรบุคคล", icon: Users2, userCount: 28 },
+  { id: "erp", name: "ERP", description: "ระบบบริหารทรัพยากรองค์กร", icon: Calculator },
+  { id: "e-office", name: "E-Office", description: "ระบบสารบรรณอิเล็กทรอนิกส์", icon: FileText },
+  { id: "document-management", name: "จัดการเอกสาร", description: "ระบบจัดการเอกสาร", icon: FolderSearch },
+  { id: "academic", name: "งานวิชาการ", description: "ระบบงานวิชาการ", icon: GraduationCap },
+  { id: "hr", name: "งานบุคคล", description: "ระบบบริหารทรัพยากรบุคคล", icon: Users2 },
 ];
+
+/* ==============================================================================
+   StatCard Component
+   ============================================================================== */
+
+function StatCard({ icon: Icon, label, value, color, bg }: {
+  icon: React.ElementType; label: string; value: number; color: string; bg: string;
+}) {
+  return (
+    <div className="bg-tu-surface rounded-2xl border border-tu-border shadow-sm p-5 hover:shadow-md hover:scale-[1.02] transition-all duration-200 motion-reduce:transition-none motion-reduce:hover:scale-100">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs font-medium text-tu-text-muted">{label}</p>
+        <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", bg)}>
+          <Icon size={20} className={color} />
+        </div>
+      </div>
+      <p className="text-4xl font-bold text-tu-text-primary tabular-nums">{value.toLocaleString("th-TH")}</p>
+    </div>
+  );
+}
 
 function ApplicationHubContent() {
   const [search, setSearch] = useUrlState("search", "");
@@ -76,32 +95,29 @@ function ApplicationHubContent() {
   const unpinnedApps: AppWithStatus[] = filtered.filter((a) => !pinnedIds.has(a.id));
   if (!canView) return null; // satisfy lint for hook order
 
+  const onlineCount = visibleApps.filter(a => a.status === "online").length;
+  const onlinePercent = visibleApps.length > 0 ? Math.round((onlineCount / visibleApps.length) * 100) : 0;
+  const maintenanceCount = visibleApps.filter(a => a.status !== "online").length;
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div><h1 className="text-2xl font-semibold text-tu-text-primary">ศูนย์กลางแอปพลิเคชัน</h1><p className="text-tu-text-muted text-sm mt-1">รวมระบบงานทั้งหมดของคณะนิติศาสตร์ไว้ในจุดเดียว</p></div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "ระบบทั้งหมด", value: visibleApps.length.toString(), sub: `${visibleApps.length} หมวดหมู่`, icon: Server, c: "text-tu-primary", b: "bg-tu-primary-soft" },
-          { label: "กำลังออนไลน์", value: String(visibleApps.filter(a => a.status === "online").length), sub: `${Math.round((visibleApps.filter(a => a.status === "online").length / Math.max(1, visibleApps.length)) * 100)}%`, icon: Wifi, c: "text-tu-info", b: "bg-tu-info/10" },
-          { label: "Active Users", value: String(visibleApps.reduce((s, a) => s + a.userCount, 0)), sub: "วันนี้", icon: Activity, c: "text-tu-success", b: "bg-tu-success/10" },
-          { label: "บำรุงรักษา", value: String(visibleApps.filter(a => a.status !== "online").length), sub: visibleApps.filter(a => a.status !== "online").map(a => a.name).join(", ") || "0", icon: AlertTriangle, c: "text-tu-warning", b: "bg-tu-warning/10" },
-        ].map((s) => (
-          <div key={s.label} className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-4 flex items-center gap-3">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${s.b}`}><s.icon size={20} className={s.c} /></div>
-            <div><p className="text-lg font-bold text-tu-text-primary">{s.value}</p><p className="text-xs text-tu-text-muted">{s.label}<span className="text-tu-text-muted/60 ml-1">({s.sub})</span></p></div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={Server} label="ระบบทั้งหมด" value={visibleApps.length} color="text-tu-primary" bg="bg-tu-primary-soft" />
+        <StatCard icon={Wifi} label="กำลังออนไลน์" value={onlineCount} color="text-tu-info" bg="bg-tu-info/10" />
+        <StatCard icon={Activity} label="อัตราออนไลน์" value={onlinePercent} color="text-tu-success" bg="bg-tu-success/10" />
+        <StatCard icon={AlertTriangle} label="บำรุงรักษา" value={maintenanceCount} color="text-tu-warning" bg="bg-tu-warning/10" />
       </div>
 
       {/* Search + Grid/List Toggle */}
       <div className="flex items-center justify-between gap-4">
         <div className="relative max-w-sm flex-1"><Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" /><input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาแอปพลิเคชัน..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-tu-border-focus/20 outline-none transition" /></div>
-        <div className="flex items-center gap-1 bg-tu-surface border border-tu-border rounded-lg p-0.5 shrink-0">
-          <button onClick={() => setViewMode("grid")} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "grid" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary")}><Grid3X3 size={14} />Grid</button>
-          <button onClick={() => setViewMode("list")} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "list" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-secondary")}><List size={14} />List</button>
+        <div className="inline-flex p-1 rounded-xl bg-tu-bg/70 border border-tu-border shrink-0">
+          <button onClick={() => setViewMode("grid")} className={cn("px-4 h-9 rounded-lg text-[12.5px] font-medium transition-all flex items-center gap-1.5", viewMode === "grid" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-muted hover:text-tu-text-primary")}><Grid3X3 size={14} />Grid</button>
+          <button onClick={() => setViewMode("list")} className={cn("px-4 h-9 rounded-lg text-[12.5px] font-medium transition-all flex items-center gap-1.5", viewMode === "list" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-muted hover:text-tu-text-primary")}><List size={14} />List</button>
         </div>
       </div>
 
@@ -174,34 +190,38 @@ function AppCard({ app, viewMode, isPinned, onTogglePin, canPin }: {
 
   if (viewMode === "list") {
     return (
-      <div className="group bg-tu-surface rounded-[--radius-card] border border-tu-border hover:shadow-md transition-all">
-        <div className="flex items-center gap-3 p-4">
+      <div className="group bg-tu-surface rounded-2xl border border-tu-border shadow-sm hover:shadow-md transition-all duration-200 motion-reduce:transition-none">
+        <div className="flex items-center gap-4 p-4">
           <div className="relative shrink-0">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-tu-primary-soft"><app.icon size={22} className="text-tu-primary" /></div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-tu-primary-soft"><app.icon size={20} className="text-tu-primary" /></div>
             <span className={cn("absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-tu-surface", s.dot)} />
           </div>
-          <div className="flex-1 min-w-0"><span className="text-sm font-semibold text-tu-text-primary">{app.name}</span><p className="text-xs text-tu-text-muted">{app.description}</p></div>
-          <div className="text-right shrink-0 text-xs text-tu-text-muted">
-            <p className="flex items-center gap-1"><Users2 size={12} />{app.userCount} users</p>
-            <p className={s.color}>● {s.label}</p>
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-semibold text-tu-text-primary">{app.name}</span>
+            <p className="text-xs text-tu-text-muted">{app.description}</p>
           </div>
-          {canPin && (
-            <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all"><Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} /></button>
-          )}
+          <div className="shrink-0 flex items-center gap-2">
+            <span className={cn("text-xs font-medium", s.color)}>● {s.label}</span>
+            {canPin && (
+              <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all">
+                <Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="group relative bg-tu-surface rounded-[--radius-card] border border-tu-border p-5 hover:shadow-md transition-all flex flex-col items-center text-center">
+    <div className="group relative bg-tu-surface rounded-2xl border border-tu-border shadow-sm p-5 hover:shadow-md hover:scale-[1.02] transition-all duration-200 motion-reduce:transition-none motion-reduce:hover:scale-100 flex flex-col items-center text-center">
       {canPin && (
-        <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded-md text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all">
+        <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-tu-text-muted hover:text-tu-secondary hover:bg-tu-secondary-soft transition-all">
           <Star size={14} className={isPinned ? "fill-tu-secondary text-tu-secondary" : ""} />
         </button>
       )}
 
-      <div className="relative mb-3">
+      <div className="relative mb-4">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-tu-primary-soft">
           <app.icon size={28} className="text-tu-primary" />
         </div>
@@ -210,8 +230,7 @@ function AppCard({ app, viewMode, isPinned, onTogglePin, canPin }: {
 
       <h3 className="text-sm font-semibold text-tu-text-primary mb-1">{app.name}</h3>
       <p className="text-xs text-tu-text-muted mb-3">{app.description}</p>
-      <p className="text-xs text-tu-text-muted flex items-center gap-1 mb-1"><Users2 size={12} />{app.userCount} users</p>
-      <p className={cn("text-xs font-medium", s.color)}>● {s.label}</p>
+      <span className={cn("text-xs font-medium", s.color)}>● {s.label}</span>
     </div>
   );
 }

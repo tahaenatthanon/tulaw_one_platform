@@ -22,6 +22,7 @@ export async function GET() {
       data: {
         personnel: totalUsers.status === "fulfilled" ? totalUsers.value : 48,
         curriculum: totalCourses.status === "fulfilled" ? totalCourses.value : 12,
+        research: totalProjects.status === "fulfilled" ? totalProjects.value : 85,
         students: 2500,
         lastSync: new Date().toISOString(),
       },
@@ -29,7 +30,7 @@ export async function GET() {
   } catch {
     return NextResponse.json({
       success: true,
-      data: { personnel: 48, curriculum: 12, students: 2500, lastSync: new Date().toISOString() },
+      data: { personnel: 48, curriculum: 12, research: 85, students: 2500, lastSync: new Date().toISOString() },
     });
   }
 }

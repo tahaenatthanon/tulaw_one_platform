@@ -7,7 +7,7 @@ import useSWR from "swr";
 import {
   Users, GraduationCap, Cpu,
   Newspaper, ExternalLink, BarChart3, TrendingUp, ArrowUpRight,
-  PieChart, Activity, RefreshCw, FlaskConical, TrendingDown, ChevronRight, Megaphone, X,
+  PieChart, Activity, RefreshCw, FlaskConical, TrendingDown, ChevronRight, X,
   ClipboardList,
 } from "lucide-react";
 import {
@@ -19,6 +19,14 @@ import { swrFetcher } from "@/lib/fetcher";
 import { useHasMinRoleLevel } from "@/hooks/use-permission";
 import { useChartPalette } from "@/hooks/use-chart-colors";
 import { ChartTooltip, SimpleTooltip } from "@/components/charts/chart-tooltip";
+
+/** Convert hex to rgba */
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 /* ==============================================================================
    Types
@@ -176,23 +184,14 @@ function StatCard({ label, value, icon: Icon, color, bg, trend }: { label: strin
   );
 }
 
-function AnnouncementsCard({ items }: { items: AnnouncementItem[] }) {
+function AnnouncementsCard({ items, annCats }: { items: AnnouncementItem[]; annCats: Array<{ id: string; name: string; color: string }> }) {
   const display = items.slice(0, 3);
   const [detail, setDetail] = useState<AnnouncementItem | null>(null);
-  const getCatIcon = (cat: string) => (cat === "ประกาศด่วน" || cat === "ด่วน" ? Megaphone : Newspaper);
-  const getCatBadge = (cat: string) => {
-    if (cat === "ประกาศด่วน" || cat === "ด่วน") return "bg-tu-error/10 text-tu-error border-tu-error/20";
-    if (cat === "เชิญชวน") return "bg-tu-info/10 text-tu-info border-tu-info/20";
-    if (cat === "ประกาศผล") return "bg-tu-success/10 text-tu-success border-tu-success/20";
-    if (cat === "นโยบาย") return "bg-tu-warning/10 text-tu-warning border-tu-warning/20";
-    return "bg-tu-bg text-tu-text-secondary border-tu-border";
-  };
-  const getCatIconBg = (cat: string) => {
-    if (cat === "ประกาศด่วน" || cat === "ด่วน") return { bg: "bg-tu-error/10", color: "text-tu-error" };
-    if (cat === "เชิญชวน") return { bg: "bg-tu-info/10", color: "text-tu-info" };
-    if (cat === "ประกาศผล") return { bg: "bg-tu-success/10", color: "text-tu-success" };
-    if (cat === "นโยบาย") return { bg: "bg-tu-warning/10", color: "text-tu-warning" };
-    return { bg: "bg-tu-primary-soft", color: "text-tu-primary" };
+
+  const catMeta = (cat: string): { hex: string; soft: string } => {
+    const found = annCats.find(c => c.name === cat);
+    const hex = found?.color ?? "#6b7280";
+    return { hex, soft: hexToRgba(hex, 0.10) };
   };
 
   return (
@@ -213,21 +212,20 @@ function AnnouncementsCard({ items }: { items: AnnouncementItem[] }) {
       ) : (
         <div className="bg-tu-surface rounded-2xl border border-tu-border shadow-sm divide-y divide-tu-border">
           {display.map((ann) => {
-            const Icon = getCatIcon(ann.category);
-            const ib = getCatIconBg(ann.category);
+            const cm = catMeta(ann.category);
             return (
               <button
                 key={ann.id}
                 onClick={() => setDetail(ann)}
                 className="w-full flex items-center gap-4 px-5 py-3 hover:bg-tu-surface-hover transition-colors duration-150 group text-left"
               >
-                <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", ib.bg)}>
-                  <Icon size={18} className={ib.color} />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: cm.soft }}>
+                  <Newspaper size={18} style={{ color: cm.hex }} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-tu-text-primary group-hover:text-tu-primary transition-colors truncate">{ann.title}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border", getCatBadge(ann.category))}>{ann.category}</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-white" style={{ borderColor: cm.hex, color: cm.hex }}>{ann.category}</span>
                     <span className="text-xs text-tu-text-muted">{formatThaiDate(ann.publishDate)}</span>
                   </div>
                 </div>
@@ -239,32 +237,39 @@ function AnnouncementsCard({ items }: { items: AnnouncementItem[] }) {
       )}
 
       {/* Detail Modal */}
-      {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDetail(null)}>
-          <div className="bg-tu-surface rounded-[--radius-dialog] border border-tu-border shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-tu-primary-soft">
-                  {(() => { const I = getCatIcon(detail.category); return <I size={16} className="text-tu-primary" />; })()}
-                </div>
-                <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border bg-tu-surface", getCatBadge(detail.category))}>{detail.category}</span>
-              </div>
-              <button onClick={() => setDetail(null)} className="p-1 rounded-md text-tu-text-muted hover:bg-tu-surface-hover"><X size={18} /></button>
-            </div>
-            <h2 className="text-base font-semibold text-tu-text-primary mb-3">{detail.title}</h2>
-            <div className="text-xs text-tu-text-muted mb-4">
-              <span>{new Date(detail.publishDate).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })}</span>
-            </div>
-            <div className="border-t border-tu-border pt-4">
-              <p className="text-sm text-tu-text-secondary leading-relaxed whitespace-pre-wrap">{detail.title}</p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-tu-border flex justify-end">
-              <button onClick={() => setDetail(null)} className="rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors">ปิด</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DetailModal detail={detail} onClose={() => setDetail(null)} annCats={annCats} />
     </>
+  );
+}
+
+function DetailModal({ detail, onClose, annCats }: { detail: AnnouncementItem | null; onClose: () => void; annCats: Array<{ id: string; name: string; color: string }> }) {
+  if (!detail) return null;
+  const hex = annCats.find(c => c.name === detail.category)?.color ?? "#6b7280";
+  const soft = hexToRgba(hex, 0.10);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl border border-tu-border shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: soft }}>
+              <Newspaper size={16} style={{ color: hex }} />
+            </div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-white" style={{ borderColor: hex, color: hex }}>{detail.category}</span>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-tu-text-muted hover:bg-tu-surface-hover transition-colors"><X size={18} /></button>
+        </div>
+        <h2 className="text-base font-semibold text-tu-text-primary mb-3">{detail.title}</h2>
+        <div className="text-xs text-tu-text-muted mb-4">
+          <span>{new Date(detail.publishDate).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })}</span>
+        </div>
+        <div className="border-t border-tu-border pt-4">
+          <p className="text-sm text-tu-text-secondary leading-relaxed whitespace-pre-wrap">{detail.title}</p>
+        </div>
+        <div className="mt-6 pt-4 border-t border-tu-border flex justify-end">
+          <button onClick={onClose} className="rounded-xl bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors">ปิด</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -712,6 +717,14 @@ function DashboardPageContent() {
     refreshInterval: 300000,
     revalidateOnFocus: true,
   });
+
+  // Fetch announcement categories from settings for dynamic colors
+  const { data: settingsData } = useSWR("/api/settings", swrFetcher);
+  const settings = (settingsData || {}) as Record<string, Record<string, unknown>>;
+  const storageSection = (settings.storage || {}) as Record<string, unknown>;
+  const annCats: Array<{ id: string; name: string; color: string }> =
+    (Array.isArray(storageSection.annCats) ? storageSection.annCats : []) as Array<{ id: string; name: string; color: string }>;
+
   const error = statsError ? "ไม่สามารถโหลดข้อมูลแดชบอร์ดได้" : null;
   const [refreshing, setRefreshing] = useState(false);
   const handleRefresh = useCallback(async () => { setRefreshing(true); await mutate(); setRefreshing(false); }, [mutate]);
@@ -734,13 +747,13 @@ function DashboardPageContent() {
         </div>
         <div className="flex items-center gap-3">
           {data?.lastSync && (<span className="text-xs text-tu-text-muted flex items-center gap-1.5"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full bg-tu-success opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-tu-success" /></span>อัปเดตล่าสุด {formatThaiTime(data.lastSync)}</span>)}
-          <button onClick={handleRefresh} disabled={refreshing} className="flex items-center gap-1.5 rounded-[--radius-btn] bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors disabled:opacity-60 shrink-0">
+          <button onClick={handleRefresh} disabled={refreshing} className="flex items-center gap-1.5 rounded-xl bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors disabled:opacity-60 shrink-0">
             <RefreshCw size={16} className={cn(refreshing && "animate-spin")} />รีเฟรช
           </button>
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{STAT_CARDS.map((card) => (<StatCard key={card.key} label={card.label} value={statValues[card.key] ?? card.defaultValue} icon={card.icon} color={card.color} bg={card.bg} trend={statTrends[card.key]} />))}</div>
-      <AnnouncementsCard items={data?.latestAnnouncements ?? []} />
+      <AnnouncementsCard items={data?.latestAnnouncements ?? []} annCats={annCats} />
 
       {/* Main BI Chart Area */}
       <div>
@@ -793,7 +806,7 @@ function DashboardPageContent() {
                 className={cn(
                   "px-4 h-9 rounded-lg text-[12.5px] font-medium transition-all",
                   view === v.id
-                    ? "bg-tu-surface text-tu-text-primary shadow-sm ring-1 ring-tu-border"
+                    ? "bg-tu-primary text-white shadow-sm"
                     : "text-tu-text-muted hover:text-tu-text-primary",
                 )}
               >
@@ -801,11 +814,6 @@ function DashboardPageContent() {
               </button>
             ))}
           </div>
-          {data?.lastSync && (
-            <div className="text-[12px] text-tu-text-muted">
-              ช่วงข้อมูล: <span className="text-tu-text-primary font-medium">{formatThaiDate(data.lastSync)} — {new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}</span>
-            </div>
-          )}
         </div>
 
         {/* Chart */}
