@@ -115,13 +115,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex flex-col bg-tu-primary-active text-white transition-all duration-200 lg:static",
-          sidebarCollapsed ? "lg:w-[68px]" : "lg:w-[220px]",
-          !sidebarCollapsed ? "w-[220px]" : "w-[68px]",
+          sidebarCollapsed ? "lg:w-[72px]" : "lg:w-[280px]",
+          !sidebarCollapsed ? "w-[280px]" : "w-[72px]",
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         {/* Logo */}
-        <div className={cn("flex h-16 items-center border-b border-white/10 px-3", sidebarCollapsed ? "justify-center" : "gap-3 px-5")}>
+        <div className={cn("flex h-16 items-center border-b border-white/10", sidebarCollapsed ? "justify-center px-3" : "gap-3 px-5")}>
           <TooltipWrapper show={sidebarCollapsed} label={systemName}>
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-tu-secondary">
               <span className="text-tu-text-primary font-bold text-sm">มธ</span>
@@ -143,7 +143,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 space-y-1">
           {!sidebarCollapsed && (
-            <p className="px-3 text-[11px] font-medium uppercase tracking-wider text-white/40 mb-2">
+            <p className="px-5 py-2 text-[11px] font-semibold uppercase tracking-wider text-white/50">
               เมนูหลัก
             </p>
           )}
@@ -153,9 +153,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-[--radius-btn] text-sm font-medium transition-colors",
-                  sidebarCollapsed ? "justify-center mx-2 px-0 py-2.5" : "mx-3 px-3 py-2.5",
-                  isActive(item.href) ? "bg-tu-secondary text-tu-text-primary" : "text-white/70 hover:bg-white/10 hover:text-white"
+                  "flex items-center gap-4 rounded-[--radius-btn] text-sm font-medium transition-colors duration-150",
+                  sidebarCollapsed ? "justify-center mx-2 px-0 py-2.5" : "mx-3 px-4 py-2.5",
+                  isActive(item.href)
+                    ? "bg-tu-secondary text-tu-text-primary shadow-sm border-l-[3px] border-tu-secondary"
+                    : "text-white/70 hover:bg-white/10 hover:text-white"
                 )}
               >
                 <item.icon size={20} />
@@ -167,9 +169,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {adminNav.filter(hasAccess).length > 0 && (
             <>
               {!sidebarCollapsed && (
-                <p className="px-3 pt-4 text-[11px] font-medium uppercase tracking-wider text-white/40 mb-2">
-                  ดูแลระบบ
-                </p>
+                <>
+                  <div className="mx-5 border-t border-white/10 my-2" />
+                  <p className="px-5 py-2 text-[11px] font-semibold uppercase tracking-wider text-white/50">
+                    ดูแลระบบ
+                  </p>
+                </>
               )}
               {adminNav.filter(hasAccess).map((item) => (
                 <TooltipWrapper key={item.href} show={sidebarCollapsed} label={item.label}>
@@ -177,9 +182,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     href={item.href}
                     onClick={() => setSidebarOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 rounded-[--radius-btn] text-sm font-medium transition-colors",
-                      sidebarCollapsed ? "justify-center mx-2 px-0 py-2.5" : "mx-3 px-3 py-2.5",
-                      isActive(item.href) ? "bg-tu-secondary text-tu-text-primary" : "text-white/70 hover:bg-white/10 hover:text-white"
+                      "flex items-center gap-4 rounded-[--radius-btn] text-sm font-medium transition-colors duration-150",
+                      sidebarCollapsed ? "justify-center mx-2 px-0 py-2.5" : "mx-3 px-4 py-2.5",
+                      isActive(item.href)
+                        ? "bg-tu-secondary text-tu-text-primary shadow-sm border-l-[3px] border-tu-secondary"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
                     )}
                   >
                     <item.icon size={20} />
@@ -196,8 +203,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               className={cn(
-                "flex items-center gap-3 rounded-[--radius-btn] text-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors",
-                sidebarCollapsed ? "justify-center w-full p-2.5" : "w-full px-3 py-2.5"
+                "flex items-center gap-4 rounded-[--radius-btn] text-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors duration-150",
+                sidebarCollapsed ? "justify-center w-full p-2.5" : "w-full px-4 py-2.5"
               )}
             >
               <LogOut size={20} />

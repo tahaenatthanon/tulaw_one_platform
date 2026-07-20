@@ -7,21 +7,27 @@
 
 :root {
   /* ─── Brand Tokens ─── */
---tu-primary: #A31D1D;
---tu-primary-hover: #850000;
---tu-primary-active: #710000;
+  --tu-primary: #A31D1D;
+  --tu-primary-hover: #850000;
+  --tu-primary-active: #710000;
+  --tu-primary-soft: #df5959;
 
---tu-secondary: #FDB813;
---tu-secondary-soft: #FEF3D4;
---tu-secondary-active: #C89100;
+  --tu-secondary: #FDB813;
+  --tu-secondary-hover: #E5A800;
+  --tu-secondary-soft: #FEF3D4;
+  --tu-secondary-active: #C89100;
 
---tu-border: #E5E7EB;
+  /* ─── Semantic Tokens ─── */
+  --tu-bg: #F9FAFB;
+  --tu-surface: #FFFFFF;
+  --tu-surface-hover: #F8FAFC;
+  --tu-border: #E5E7EB;
+  --tu-border-focus: #A31D1D;
 
---tu-text-primary: #0F172A;
---tu-text-secondary: #334155;
---tu-text-muted: #64748B;
-
---tu-surface-hover: #F8FAFC;
+  --tu-text-primary: #0F172A;
+  --tu-text-secondary: #334155;
+  --tu-text-muted: #64748B;
+  --tu-text-inverse: #FFFFFF;
 
   /* ─── Status Colors ─── */
   --tu-success: #16A34A;

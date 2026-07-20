@@ -44,8 +44,20 @@ export function useChartColors(): ChartColors {
   return colors;
 }
 
-/** Returns an array of chart colors for multi-series charts */
+/** Returns an array of chart colors for multi-series charts (8+ BI semantic colors) */
 export function useChartPalette(): string[] {
   const c = useChartColors();
-  return [c.primary, c.info, c.secondary, c.success, c.warning, c.muted];
+  return [
+    c.primary,           // #A31D1D — primary red
+    c.info,              // #2563EB — info blue
+    c.success,           // #16A34A — success green
+    c.warning,           // #D97706 — warning amber
+    "#7C3AED",           // purple
+    "#0891B2",           // cyan
+    "#DB2777",           // pink
+    "#65A30D",           // lime
+    c.secondary,         // #FDB813 — secondary yellow
+    c.secondaryActive,   // #C99200
+    c.muted,             // #9CA3AF
+  ];
 }
