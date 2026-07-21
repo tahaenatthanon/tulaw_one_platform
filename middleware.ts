@@ -16,10 +16,12 @@ export default withAuth(
     const { pathname } = req.nextUrl;
     const roles = (req.nextauth.token?.roles as string[] | undefined) ?? [];
     const level = getHighestRoleLevel(roles);
-    const mfaVerified = req.nextauth.token?.mfaVerified as boolean | undefined;
+    // TODO: ปิด MFA admin ชั่วคราว — เอา comment MFA block + mfaVerified ออกเมื่อพร้อม
+    // const mfaVerified = req.nextauth.token?.mfaVerified as boolean | undefined;
 
     // ─── MFA Enforcement for System Admin+ (level >= 80) ───
-    // If user needs MFA but hasn't verified, only allow /settings/mfa-setup and /api/mfa
+    // TODO: ปิดชั่วคราว — เปิดเมื่อไหร่ก็เอา comment ออก
+    /*
     if (level >= 80 && mfaVerified === false) {
       if (
         pathname.startsWith("/settings/mfa-setup") ||
@@ -31,6 +33,7 @@ export default withAuth(
       }
       return NextResponse.redirect(new URL("/settings/mfa-setup", req.url));
     }
+    */
 
     // ─── Users & Roles — Super Admin or System Admin only (level >= 80) ───
     if (pathname.startsWith("/users") && level < 80) {

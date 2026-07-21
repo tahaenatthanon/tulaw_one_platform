@@ -667,12 +667,6 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
     await onMutate();
   };
 
-  // Format reading time from content length
-  const getReadingTime = (content: string): number => {
-    const words = content.split(/\s+/).filter(Boolean).length;
-    return Math.max(1, Math.ceil(words / 50)); // ~50 words per minute for Thai/English mixed
-  };
-
   return (
     <section className="rounded-2xl border border-tu-border bg-white shadow-sm">
       {/* Header */}
@@ -808,8 +802,6 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
                       <div className="mt-4 flex items-center gap-3 text-[11px] text-tu-text-muted">
                         <span>{ann.publisher}</span><span>·</span>
                         <span>{new Date(ann.date).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" })}</span>
-                        <span>·</span>
-                        <span className="inline-flex items-center gap-1"><Clock size={11} /> {getReadingTime(ann.content)} นาที</span>
                       </div>
                     </article>
                   );
@@ -846,8 +838,6 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
                             <span className="inline-flex items-center gap-1"><Building2 size={11} /> {ann.publisher}</span>
                             <span>·</span>
                             <span>{new Date(ann.date).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" })}</span>
-                            <span>·</span>
-                            <span className="inline-flex items-center gap-1"><Clock size={11} /> อ่าน {getReadingTime(ann.content)} นาที</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">

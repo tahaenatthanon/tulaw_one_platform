@@ -80,40 +80,6 @@ export function useActionPermissions() {
       notification: can("SETTINGS_NOTIFICATION"),
       sso: can("SETTINGS_SSO"),
     },
-    // ─── ERP ───
-    erp: {
-      view: can("ERP_VIEW"),
-      createEditDelete: can("ERP_MANAGE"),
-      approve: can("ERP_APPROVE"),
-      report: can("ERP_REPORT"),
-    },
-    // ─── E-Office ───
-    eoffice: {
-      view: can("E_OFFICE_VIEW"),
-      create: can("E_OFFICE_CREATE"),
-      approve: can("E_OFFICE_APPROVE"),
-      manage: can("E_OFFICE_MANAGE"),
-    },
-    // ─── Document Management ───
-    docMgmt: {
-      view: can("DOCUMENT_MANAGEMENT_VIEW"),
-      upload: can("DOCUMENT_MANAGEMENT_UPLOAD"),
-      manage: can("DOCUMENT_MANAGEMENT_MANAGE"),
-      ocr: can("DOCUMENT_MANAGEMENT_OCR"),
-    },
-    // ─── Academic ───
-    academic: {
-      view: can("ACADEMIC_VIEW"),
-      manage: can("ACADEMIC_MANAGE"),
-      exam: can("ACADEMIC_EXAM"),
-    },
-    // ─── HR ───
-    hr: {
-      view: can("HR_VIEW"),
-      manage: can("HR_MANAGE"),
-      payroll: can("HR_PAYROLL"),
-      attendance: can("HR_ATTENDANCE"),
-    },
   };
 }
 

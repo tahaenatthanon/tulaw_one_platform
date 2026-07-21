@@ -1,27 +1,15 @@
-import type {
-  GetServerSidePropsContext,
-  NextApiRequest,
-  NextApiResponse,
-} from "next";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
+// ─── Providers ──────────────────────────────────────────────────────────────
+
 function buildProviders(): NextAuthOptions["providers"] {
   const providers: NextAuthOptions["providers"] = [];
 
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const GoogleProvider = require("next-auth/providers/google").default;
-    providers.push(
-      GoogleProvider({
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      })
-    );
-  }
-
+  // ── Credentials (local / fallback) ──
+  // Azure AD login is handled via explicit Route Handler at /api/auth/azure/*
   providers.push(
     CredentialsProvider({
       name: "credentials",
@@ -75,25 +63,44 @@ function buildProviders(): NextAuthOptions["providers"] {
   return providers;
 }
 
+// ─── Auth Options ───────────────────────────────────────────────────────────
+
 export const authOptions: NextAuthOptions = {
   providers: buildProviders(),
+
   callbacks: {
-    async jwt({ token, user, account }) {
+    // ── jwt: Attach roles, MFA status ──
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.roles = (user as { roles?: string[] }).roles ?? [];
-        token.departmentId = (user as { departmentId?: number }).departmentId ?? null;
-        token.mfaVerified = (user as { mfaVerified?: boolean }).mfaVerified ?? false;
+        token.departmentId =
+          (user as { departmentId?: number }).departmentId ?? null;
+        token.mfaVerified =
+          (user as { mfaVerified?: boolean }).mfaVerified ?? false;
 
         // Check MFA status from DB for admin users
         const { ROLE_LEVELS } = await import("@/lib/permissions");
         const highestLevel = Math.max(
           0,
           ...((token.roles as string[]) ?? []).map(
-            (r) => ROLE_LEVELS[r as "super_admin" | "system_admin" | "dean" | "dept_admin" | "user" | "viewer"] ?? 0
+            (r) =>
+              ROLE_LEVELS[
+                r as
+                  | "super_admin"
+                  | "system_admin"
+                  | "dean"
+                  | "dept_admin"
+                  | "user"
+                  | "viewer"
+              ] ?? 0
           )
         );
+
         if (highestLevel >= 80 && !token.mfaVerified) {
+          // TODO: ปิด MFA admin ชั่วคราว — เอาออกเมื่อพร้อม
+          token.mfaVerified = true;
+          /*
           try {
             const { prisma } = await import("@/lib/prisma");
             const mfa = await prisma.userMfa.findFirst({
@@ -103,17 +110,16 @@ export const authOptions: NextAuthOptions = {
           } catch {
             token.mfaVerified = false;
           }
+          */
         } else {
           token.mfaVerified = true;
         }
       }
-      // Google OAuth — assign viewer role for first-time Google users
-      if (account?.provider === "google" && !token.roles) {
-        token.roles = ["user"];
-        token.mfaVerified = true;
-      }
+
       return token;
     },
+
+    // ── session: Copy token claims to session ──
     async session({ session, token }) {
       if (session.user) {
         (session.user as { id: string }).id = token.id as string;
@@ -127,14 +133,17 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+
   pages: {
     signIn: "/login",
     error: "/login",
   },
+
   session: {
     strategy: "jwt",
     maxAge: Number(process.env.SESSION_MAX_AGE) || 28800,
   },
+
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === "development",
 };

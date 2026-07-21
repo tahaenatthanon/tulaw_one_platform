@@ -114,7 +114,7 @@ function ApplicationHubContent() {
 
       {/* Search + Grid/List Toggle */}
       <div className="flex items-center justify-between gap-4">
-        <div className="relative max-w-sm flex-1"><Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" /><input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาแอปพลิเคชัน..." className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-tu-border-focus/20 outline-none transition" /></div>
+        <div className="relative max-w-sm flex-1"><Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" /><input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาแอปพลิเคชัน..." className="w-full rounded-xl border border-tu-border bg-tu-surface pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-tu-border-focus/20 outline-none transition" /></div>
         <div className="inline-flex p-1 rounded-xl bg-tu-bg/70 border border-tu-border shrink-0">
           <button onClick={() => setViewMode("grid")} className={cn("px-4 h-9 rounded-lg text-[12.5px] font-medium transition-all flex items-center gap-1.5", viewMode === "grid" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-muted hover:text-tu-text-primary")}><Grid3X3 size={14} />Grid</button>
           <button onClick={() => setViewMode("list")} className={cn("px-4 h-9 rounded-lg text-[12.5px] font-medium transition-all flex items-center gap-1.5", viewMode === "list" ? "bg-tu-primary text-white shadow-sm" : "text-tu-text-muted hover:text-tu-text-primary")}><List size={14} />List</button>

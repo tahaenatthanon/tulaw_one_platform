@@ -23,6 +23,25 @@ export async function GET() {
     checks.DB_ERROR = e instanceof Error ? e.message : "Unknown DB error";
   }
 
+  // 4. Azure AD (Microsoft Entra ID) configuration
+  checks.AZURE_AD_CLIENT_ID = !!process.env.AUTH_MICROSOFT_ENTRA_ID_ID;
+  checks.AZURE_AD_CLIENT_SECRET = !!process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET;
+  checks.AZURE_AD_TENANT_ID = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID || "common";
+  checks.AZURE_AD_ENABLED = checks.AZURE_AD_CLIENT_ID && checks.AZURE_AD_CLIENT_SECRET;
+
+  // 5. Azure AD Group Mapping
+  try {
+    const raw = process.env.AUTH_MICROSOFT_ENTRA_ID_GROUP_MAP;
+    if (raw) {
+      const map = JSON.parse(raw);
+      checks.AZURE_AD_GROUP_MAP = `Loaded (${Object.keys(map).length} mappings)`;
+    } else {
+      checks.AZURE_AD_GROUP_MAP = "Not configured (empty)";
+    }
+  } catch {
+    checks.AZURE_AD_GROUP_MAP = "Invalid JSON";
+  }
+
   const allPassed = checks.NEXTAUTH_SECRET && checks.DATABASE_URL && checks.DB_CONNECTED;
 
   return Response.json(
