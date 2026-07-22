@@ -7,7 +7,7 @@ import useSWR from "swr";
 import {
   Newspaper, Plus, Pencil, Calendar, ChevronRight, ChevronLeft,
   Building2, Phone, Mail, MapPin, X, BellRing, Trash2,
-  Megaphone, Upload, Clock,
+  Megaphone, Upload, Clock, Settings2,
   Pin, Search, Filter, CalendarDays, ArrowUpRight,
   Users, BookOpen, FlaskConical, GraduationCap,
 } from "lucide-react";
@@ -567,16 +567,18 @@ function DetailModal({ ann, open, onClose, categories }: { ann: Announcement | n
    Announcements Tab
    ============================================================================== */
 
-function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, currentUserId, onMutate, categories, subscribeCats, rawAnnCats }: {
+function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, currentUserId, onMutate, categories, subscribeCats, rawAnnCats, mutateSettings }: {
   announcements: Announcement[]; canCreate: boolean; canEdit: boolean; canDelete: boolean;
   currentUserId: string; onMutate: () => void; categories: CategoryDef[]; subscribeCats: CategoryDef[];
   rawAnnCats: Array<{ id: string; name: string; color: string }>;
+  mutateSettings: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useUrlState<string>("filter", "ทั้งหมด");
   const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
   const [subLoading, setSubLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [catModalOpen, setCatModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [detailAnn, setDetailAnn] = useState<Announcement | null>(null);
   const [editAnn, setEditAnn] = useState<Announcement | null>(null);
@@ -692,12 +694,16 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
             </div>
           </div>
           {canCreate && (
-            <button
-              onClick={() => setModalOpen(true)}
-              className="inline-flex items-center gap-1.5 h-9 rounded-lg px-3 text-xs font-medium text-white shrink-0 bg-tu-primary hover:bg-tu-primary-hover transition-colors"
-            >
-              <Plus size={14} /> <span className="hidden sm:inline">สร้างประกาศ</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {canEdit && (
+                <button onClick={() => setCatModalOpen(true)} className="inline-flex items-center gap-1.5 h-9 rounded-lg px-3 text-xs font-medium text-tu-text-secondary border border-tu-border bg-tu-surface hover:bg-tu-surface-hover transition-colors">
+                  <Settings2 size={14} />จัดการประเภท
+                </button>
+              )}
+              <button onClick={() => setModalOpen(true)} className="inline-flex items-center gap-1.5 h-9 rounded-lg px-3 text-xs font-medium text-white bg-tu-primary hover:bg-tu-primary-hover transition-colors">
+                <Plus size={14} /><span className="hidden sm:inline">สร้างประกาศ</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -876,6 +882,7 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
       <CreateModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={handleCreate} categories={categories} />
       <EditModal open={editModalOpen} onClose={() => setEditModalOpen(false)} onSave={handleEditSave} ann={editAnn} categories={categories} />
       <DetailModal ann={detailAnn} open={!!detailAnn} onClose={() => setDetailAnn(null)} categories={categories} />
+      {catModalOpen && <AnnCategoryModal cats={rawAnnCats} onClose={() => setCatModalOpen(false)} mutateSettings={mutateSettings} />}
       <ConfirmDialog
         open={!!deleteTarget}
         title="ยืนยันลบประกาศ"
@@ -1144,6 +1151,56 @@ function ContactsTab({ departments }: { departments: Department[] }) {
 }
 
 /* ==============================================================================
+   Announcement Category Management Modal
+   ============================================================================== */
+function AnnCategoryModal({ cats, onClose, mutateSettings }: { cats: Array<{ id: string; name: string; color: string }>; onClose: () => void; mutateSettings: () => void }) {
+  const [items, setItems] = useState([...cats]);
+  const [newName, setNewName] = useState(""); const [newColor, setNewColor] = useState("#6B7280");
+  const [saving, setSaving] = useState(false);
+
+  const add = () => { if (newName.trim()) { setItems([...items, { id: String(Date.now()), name: newName.trim(), color: newColor }]); setNewName(""); } };
+  const edit = (id: string, field: "name"|"color", val: string) => setItems(items.map(x => x.id === id ? { ...x, [field]: val } : x));
+  const remove = (id: string) => setItems(items.filter(x => x.id !== id));
+
+  const handleSave = async () => {
+    setSaving(true);
+    const body = { section: "storage", key: "annCats", value: items };
+    await fetchApi("/api/settings", { method: "PATCH", body: JSON.stringify(body) });
+    await mutateSettings();
+    setSaving(false); onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-tu-surface w-full max-w-md rounded-[20px] border border-tu-border shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-tu-border">
+          <div><h2 className="text-base font-semibold text-tu-text-primary">จัดการประเภทประกาศ</h2><p className="text-xs text-tu-text-muted mt-0.5">เพิ่ม แก้ไข ลบหมวดหมู่ประกาศ</p></div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-tu-text-muted hover:bg-tu-bg"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-3 max-h-[55vh] overflow-y-auto">
+          {items.map(c => (
+            <div key={c.id} className="flex items-center gap-3 p-2 rounded-lg bg-tu-bg">
+              <input type="color" value={c.color} onChange={e => edit(c.id, "color", e.target.value)} className="h-8 w-8 rounded border border-tu-border cursor-pointer shrink-0" />
+              <input type="text" value={c.name} onChange={e => edit(c.id, "name", e.target.value)} className="bg-transparent text-sm flex-1 outline-none text-tu-text-primary" />
+              <button onClick={() => remove(c.id)} className="p-1 rounded-md text-tu-text-muted hover:text-tu-error hover:bg-tu-error/10"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2 border-t border-tu-border">
+            <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)} className="h-9 w-10 rounded border border-tu-border cursor-pointer shrink-0" />
+            <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="ชื่อหมวดหมู่..." className="rounded-[10px] border border-tu-border bg-tu-surface px-3 py-2 text-sm flex-1 outline-none" />
+            <button onClick={add} className="rounded-[10px] bg-tu-primary px-3 py-2 text-xs font-medium text-white hover:bg-tu-primary-hover"><Plus size={14} /></button>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-tu-border bg-tu-bg/30">
+          <button onClick={onClose} className="h-9 rounded-[10px] border border-tu-border bg-tu-surface px-4 text-sm font-medium text-tu-text-secondary">ยกเลิก</button>
+          <button onClick={handleSave} disabled={saving} className="h-9 rounded-[10px] bg-tu-primary text-white px-4 text-sm font-medium hover:bg-tu-primary-hover disabled:opacity-50">{saving ? "กำลังบันทึก..." : "บันทึก"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================================================================
    Main Page
    ============================================================================== */
 
@@ -1168,7 +1225,7 @@ function IntranetContent() {
   const announcements: Announcement[] = Array.isArray(apiAnnouncements) ? apiAnnouncements : [];
 
   // Fetch announcement categories from System Settings API
-  const { data: settingsData } = useSWR("/api/settings", swrFetcher);
+  const { data: settingsData, mutate: mutateSettings } = useSWR("/api/settings", swrFetcher);
   const settings = (settingsData || {}) as Record<string, Record<string, unknown>>;
   const storageSection = (settings.storage || {}) as Record<string, unknown>;
   const rawAnnCats: Array<{ id: string; name: string; color: string }> =
@@ -1229,7 +1286,7 @@ function IntranetContent() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "announcements" && <AnnouncementsTab announcements={announcements} canCreate={canCreate} canEdit={canEdit} canDelete={canDelete} currentUserId={currentUserId} onMutate={mutateAnns} categories={categories} subscribeCats={SUBSCRIBE_CATS} rawAnnCats={rawAnnCats} />}
+      {activeTab === "announcements" && <AnnouncementsTab announcements={announcements} canCreate={canCreate} canEdit={canEdit} canDelete={canDelete} currentUserId={currentUserId} onMutate={mutateAnns} categories={categories} subscribeCats={SUBSCRIBE_CATS} rawAnnCats={rawAnnCats} mutateSettings={mutateSettings} />}
       {activeTab === "calendar" && <CalendarTab canEdit={canEdit} canDelete={canDelete} />}
       {activeTab === "contacts" && <ContactsTab departments={departments} />}
     </div>

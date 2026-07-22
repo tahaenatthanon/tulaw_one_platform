@@ -36,21 +36,26 @@ export async function PUT(req: NextRequest) {
   if (!session?.user?.email || !hasPermission((session.user as { roles?: string[] }).roles ?? [], "SETTINGS_MANAGE")) {
     return NextResponse.json({ success: false }, { status: 403 });
   }
-  const { id, status } = await req.json();
-  if (!id || !status) return NextResponse.json({ success: false, error: { message: "Missing id/status" } }, { status: 400 });
+  const body = await req.json();
 
-  // Read old status for audit log
-  const oldApp = await prisma.application.findUnique({ where: { id }, select: { status: true, name: true } });
-  const oldStatus = oldApp?.status ?? "unknown";
+  // Accept both single { id, status } and array [{ name, status }]
+  const items: Array<{ id?: string; name?: string; status: string }> = Array.isArray(body) ? body : [body];
 
-  const app = await prisma.application.update({ where: { id }, data: { status } });
+  for (const item of items) {
+    if (item.id) {
+      await prisma.application.update({ where: { id: item.id }, data: { status: item.status } });
+    } else if (item.name) {
+      const app = await prisma.application.findFirst({ where: { name: item.name } });
+      if (app) await prisma.application.update({ where: { id: app.id }, data: { status: item.status } });
+    }
+  }
 
   await logAction(session.user.id, "settings", "APP_STATUS_CHANGE", {
     entityType: "Application",
-    entityId: id,
-    oldValue: oldStatus,
-    newValue: status,
+    entityId: "bulk",
+    oldValue: "bulk",
+    newValue: JSON.stringify(items.map(i => `${i.name || i.id}:${i.status}`)),
   });
 
-  return apiSuccess(app);
+  return NextResponse.json({ success: true });
 }

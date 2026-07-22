@@ -15,8 +15,8 @@ import { JsonHighlight } from "@/components/shared/json-highlight";
    ============================================================================== */
 
 const EVENT_TYPES = [
-  "ACCOUNT_UNLOCK", "AD_SYNC", "Announcement_Created", "Announcement_Delete",
-  "Announcement_Update", "API_KEY_CREATE", "API_KEY_DELETE",
+  "ACCOUNT_UNLOCK", "AD_SYNC", "ANNOUNCEMENT_CREATED", "ANNOUNCEMENT_DELETE",
+  "ANNOUNCEMENT_UPDATE", "API_KEY_CREATE", "API_KEY_DELETE",
   "API_KEY_DISABLE", "API_KEY_ROTATE", "AUDIT_EXPORT",
   "BOOKING_CANCEL", "BOOKING_CREATE",
   "BULK_ASSIGN-ROLE", "BULK_DISABLE", "BULK_ENABLE",
@@ -28,6 +28,8 @@ const EVENT_TYPES = [
   "PROJECT_APPROVE", "PROJECT_CREATE", "PROJECT_DELETE",
   "PROJECT_REJECT", "PROJECT_UPDATE",
   "ROLE_ASSIGN", "ROLE_CREATE",
+  "ROOM_CREATE", "ROOM_DELETE", "ROOM_UPDATE",
+  "TYPE_UPDATE",
   "USER_CREATE", "USER_DELETE", "USER_LOGIN", "USER_LOGIN_FAILED",
   "USER_LOGOUT", "USER_UPDATE",
 ];
@@ -59,6 +61,10 @@ const EVENT_META: Record<string, { label: string; color: string; bg: string }> =
   USER_LOGIN_FAILED: { label: "USER_LOGIN_FAILED", color: "text-tu-error", bg: "bg-tu-error/10" },
   DASHBOARD_VIEW: { label: "DASHBOARD_VIEW", color: "text-tu-text-muted", bg: "bg-tu-bg" },
   ROLE_CREATE: { label: "ROLE_CREATE", color: "text-tu-primary", bg: "bg-tu-primary-soft" },
+  ROOM_CREATE: { label: "ROOM_CREATE", color: "text-tu-success", bg: "bg-tu-success/10" },
+  ROOM_DELETE: { label: "ROOM_DELETE", color: "text-tu-error", bg: "bg-tu-error/10" },
+  ROOM_UPDATE: { label: "ROOM_UPDATE", color: "text-tu-warning", bg: "bg-tu-warning/10" },
+  TYPE_UPDATE: { label: "TYPE_UPDATE", color: "text-tu-info", bg: "bg-tu-info/10" },
   DOC_DOWNLOAD: { label: "DOC_DOWNLOAD", color: "text-tu-info", bg: "bg-tu-info/10" },
   PERMISSION_CHANGE: { label: "PERMISSION_CHANGE", color: "text-tu-secondary-active", bg: "bg-tu-secondary-soft" },
   USER_CREATE: { label: "USER_CREATE", color: "text-tu-success", bg: "bg-tu-success/10" },
@@ -78,9 +84,9 @@ const EVENT_META: Record<string, { label: string; color: string; bg: string }> =
   ROLE_ASSIGN: { label: "ROLE_ASSIGN", color: "text-tu-primary", bg: "bg-tu-primary-soft" },
   MFA_RESET: { label: "MFA_RESET", color: "text-tu-warning", bg: "bg-tu-warning/10" },
   ACCOUNT_UNLOCK: { label: "ACCOUNT_UNLOCK", color: "text-tu-info", bg: "bg-tu-info/10" },
-  Announcement_Created: { label: "Announcement_Created", color: "text-tu-success", bg: "bg-tu-success/10" },
-  Announcement_Delete: { label: "Announcement_Delete", color: "text-tu-error", bg: "bg-tu-error/10" },
-  Announcement_Update: { label: "Announcement_Update", color: "text-tu-warning", bg: "bg-tu-warning/10" },
+  ANNOUNCEMENT_CREATED: { label: "ANNOUNCEMENT_CREATED", color: "text-tu-success", bg: "bg-tu-success/10" },
+  ANNOUNCEMENT_DELETE: { label: "ANNOUNCEMENT_DELETE", color: "text-tu-error", bg: "bg-tu-error/10" },
+  ANNOUNCEMENT_UPDATE: { label: "ANNOUNCEMENT_UPDATE", color: "text-tu-warning", bg: "bg-tu-warning/10" },
   PASSWORD_RESET: { label: "PASSWORD_RESET", color: "text-tu-warning", bg: "bg-tu-warning/10" },
   API_KEY_CREATE: { label: "API_KEY_CREATE", color: "text-tu-success", bg: "bg-tu-success/10" },
   API_KEY_ROTATE: { label: "API_KEY_ROTATE", color: "text-tu-warning", bg: "bg-tu-warning/10" },

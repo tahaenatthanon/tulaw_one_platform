@@ -2,10 +2,10 @@
 
 import { useState, useEffect, Suspense } from "react";
 import useSWR from "swr";
-import { swrFetcher } from "@/lib/fetcher";
+import { swrFetcher, fetchApi } from "@/lib/fetcher";
 import {
   Search, Star, Calculator, FileText, FolderSearch, GraduationCap,
-  Users2, Grid3X3, List, Wifi, Activity, Server, AlertTriangle,
+  Users2, Grid3X3, List, Wifi, Activity, Server, AlertTriangle, Settings2, X, Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHasPermission, useHasMinRoleLevel } from "@/hooks/use-permission";
@@ -57,6 +57,7 @@ function ApplicationHubContent() {
     catch { return new Set<string>(); }
   });
   const [viewMode, setViewMode] = useUrlState<"grid" | "list">("view", "grid");
+  const [statusModal, setStatusModal] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("hub_pinned", JSON.stringify(Array.from(pinnedIds)));
@@ -70,10 +71,11 @@ function ApplicationHubContent() {
     hr: useHasPermission("HR_VIEW"),
   };
 
-  const canPin = useHasMinRoleLevel(30); // Viewer (level 10) cannot pin
+  const canPin = useHasMinRoleLevel(30);
+  const canManageStatus = useHasPermission("SETTINGS_VIEW");
 
   // Fetch app statuses from Settings API (real-time) — match by name
-  const { data: appsData } = useSWR("/api/settings/app-status", swrFetcher);
+  const { data: appsData, mutate: mutateApps } = useSWR("/api/settings/app-status", swrFetcher);
   const statusMap = new Map<string, AppStatus>(
     (Array.isArray(appsData) ? appsData : []).map((a: { name: string; status: string }) => [a.name, a.status as AppStatus])
   );
@@ -102,7 +104,18 @@ function ApplicationHubContent() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div><h1 className="text-2xl font-semibold text-tu-text-primary">Application Hub</h1><p className="text-tu-text-muted text-sm mt-1">รวมระบบงานทั้งหมดของคณะนิติศาสตร์ไว้ในจุดเดียว</p></div>
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-2 text-[11px] font-semibold tracking-[0.16em] uppercase text-tu-primary/80"><span className="h-1.5 w-1.5 rounded-full bg-tu-primary" />Applications</div>
+          <h1 className="mt-3 truncate text-[26px] sm:text-[32px] font-semibold tracking-tight leading-tight text-tu-text-primary">Application Hub</h1>
+          <p className="mt-2 text-[14px] text-tu-text-muted max-w-2xl">รวมระบบงานทั้งหมดของคณะนิติศาสตร์ไว้ในจุดเดียว</p>
+        </div>
+        {canManageStatus && (
+          <button onClick={() => setStatusModal(true)} className="shrink-0 h-10 px-4 rounded-xl border border-tu-border bg-tu-surface hover:bg-tu-surface-hover text-[13px] font-medium text-tu-text-secondary inline-flex items-center gap-2 transition-colors">
+            <Settings2 size={16} />จัดการสถานะแอป
+          </button>
+        )}
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -141,6 +154,64 @@ function ApplicationHubContent() {
             {unpinnedApps.map((a) => <AppCard key={a.id} app={a} viewMode={viewMode} isPinned={false} onTogglePin={() => setPinnedIds(prev => { const n = new Set(prev); n.has(a.id) ? n.delete(a.id) : n.add(a.id); return n; })} canPin={canPin} />)}
           </div>
         )}
+      </div>
+
+      {statusModal && <AppStatusModal apps={apps} onClose={() => setStatusModal(false)} mutate={mutateApps} />}
+    </div>
+  );
+}
+
+/* ==============================================================================
+   App Status Modal
+   ============================================================================== */
+function AppStatusModal({ apps, onClose, mutate }: { apps: AppWithStatus[]; onClose: () => void; mutate: () => void }) {
+  const [statuses, setStatuses] = useState<Record<string, AppStatus>>(() => {
+    const s: Record<string, AppStatus> = {};
+    apps.forEach(a => { s[a.name] = a.status; });
+    return s;
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const payload = apps.map(a => ({ name: a.name, status: statuses[a.name] }));
+    await fetchApi("/api/settings/app-status", { method: "PUT", body: JSON.stringify(payload) });
+    await mutate();
+    setSaving(false);
+    onClose();
+  };
+
+  const STATUS_OPTIONS: { value: AppStatus; label: string; color: string }[] = [
+    { value: "online", label: "🟢 Online", color: "text-tu-success" },
+    { value: "maintenance", label: "🟡 Maintenance", color: "text-tu-warning" },
+    { value: "offline", label: "🔴 Offline", color: "text-tu-error" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-tu-surface w-full max-w-md rounded-[20px] border border-tu-border shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-tu-border">
+          <div>
+            <h2 className="text-base font-semibold text-tu-text-primary">จัดการสถานะแอป</h2>
+            <p className="text-xs text-tu-text-muted mt-0.5">ปรับสถานะการทำงานของแต่ละระบบ</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-tu-text-muted hover:bg-tu-bg hover:text-tu-text-primary"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+          {apps.map(a => (
+            <div key={a.id} className="flex items-center gap-3 p-3 rounded-lg border border-tu-border bg-tu-bg">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-tu-primary-soft"><a.icon size={16} className="text-tu-primary" /></div>
+              <span className="text-sm text-tu-text-primary flex-1 font-medium">{a.name}</span>
+              <select value={statuses[a.name]} onChange={e => setStatuses(s => ({ ...s, [a.name]: e.target.value as AppStatus }))} className="rounded-[10px] border border-tu-border bg-tu-surface px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-tu-primary/20">
+                {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-tu-border bg-tu-bg/30">
+          <button onClick={onClose} className="h-9 rounded-[10px] border border-tu-border bg-tu-surface px-4 text-sm font-medium text-tu-text-secondary hover:bg-tu-surface-hover">ยกเลิก</button>
+          <button onClick={handleSave} disabled={saving} className="h-9 rounded-[10px] bg-tu-primary text-white px-4 text-sm font-medium hover:bg-tu-primary-hover shadow-sm disabled:opacity-50">{saving ? "กำลังบันทึก..." : "บันทึก"}</button>
+        </div>
       </div>
     </div>
   );

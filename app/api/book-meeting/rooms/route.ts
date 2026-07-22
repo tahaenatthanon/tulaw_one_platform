@@ -52,3 +52,74 @@ export async function GET() {
     return apiError("DB_ERROR", "ไม่สามารถดึงข้อมูลห้องประชุมได้");
   }
 }
+
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return apiError("UNAUTHORIZED", "กรุณาเข้าสู่ระบบ", 401);
+  try {
+    const { name, capacity } = await req.json();
+    if (!name?.trim()) return apiError("VALIDATION", "กรุณาระบุชื่อห้อง");
+    const userId = (session.user as { id?: string }).id;
+    const room = await prisma.meetingRoom.create({
+      data: { name: name.trim(), capacity: parseInt(capacity) || 10, createdBy: userId },
+    });
+    // Audit log
+    prisma.auditLog.create({ data: { userId: userId ?? null, module: "BOOK_MEETING", action: "ROOM_CREATE", entityType: "MeetingRoom", entityId: room.id, newValue: name.trim(), isSuccess: true } }).catch(() => {});
+    return apiSuccess(room);
+  } catch (e) { console.error("[POST /api/book-meeting/rooms]", e); return apiError("DB_ERROR", "ไม่สามารถเพิ่มห้องประชุมได้"); }
+}
+
+export async function PUT(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return apiError("UNAUTHORIZED", "กรุณาเข้าสู่ระบบ", 401);
+  try {
+    const { id, name, capacity } = await req.json();
+    if (!id) return apiError("VALIDATION", "กรุณาระบุ ID");
+    const userId = (session.user as { id?: string }).id;
+    const data: Record<string, unknown> = { updatedBy: userId };
+    if (name?.trim()) data.name = name.trim();
+    if (capacity !== undefined) data.capacity = parseInt(capacity);
+    const room = await prisma.meetingRoom.update({ where: { id }, data });
+    // Audit log
+    prisma.auditLog.create({ data: { userId: userId ?? null, module: "BOOK_MEETING", action: "ROOM_UPDATE", entityType: "MeetingRoom", entityId: id, newValue: name?.trim() || "", isSuccess: true } }).catch(() => {});
+    return apiSuccess(room);
+  } catch (e) { console.error("[PUT /api/book-meeting/rooms]", e); return apiError("DB_ERROR", "ไม่สามารถแก้ไขห้องประชุมได้"); }
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return apiError("UNAUTHORIZED", "กรุณาเข้าสู่ระบบ", 401);
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) return apiError("VALIDATION", "กรุณาระบุ ID");
+    const userId = (session.user as { id?: string }).id;
+
+    // Soft-delete
+    await prisma.meetingRoom.update({ where: { id }, data: { deletedAt: new Date(), deletedBy: userId } });
+
+    // Audit log — use direct prisma call for reliability
+    await prisma.auditLog.create({
+      data: {
+        userId: userId ?? null,
+        module: "BOOK_MEETING",
+        action: "ROOM_DELETE",
+        entityType: "MeetingRoom",
+        entityId: id,
+        isSuccess: true,
+      },
+    });
+
+    return apiSuccess({ deleted: true });
+  } catch (e: unknown) {
+    console.error("[DELETE /api/book-meeting/rooms]", e);
+    // Still try to log
+    try {
+      const userId = (session.user as { id?: string }).id;
+      await prisma.auditLog.create({
+        data: { userId: userId ?? null, module: "BOOK_MEETING", action: "ROOM_DELETE", entityType: "MeetingRoom", entityId: (new URL(req.url)).searchParams.get("id") || "", isSuccess: false },
+      });
+    } catch {}
+    return apiError("DB_ERROR", "ไม่สามารถลบห้องประชุมได้");
+  }
+}

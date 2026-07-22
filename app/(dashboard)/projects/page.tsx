@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { swrFetcher, fetchApi, ApiError } from "@/lib/fetcher";
 import { useUrlState } from "@/hooks/use-url-state";
 import { toast } from "sonner";
+import { Settings2 } from "lucide-react";
 import {
   DndContext, DragOverlay, closestCorners,
   KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -482,6 +483,52 @@ function EmptyState({ variant, onCreate }: { variant: "no-projects" | "no-result
 }
 
 /* ==============================================================================
+   Project Type Management Modal
+   ============================================================================== */
+function ProjectTypeModal({ types, onClose, mutate, mutateSettings }: { types: string[]; onClose: () => void; mutate: () => void; mutateSettings: () => void }) {
+  const [items, setItems] = useState([...types]);
+  const [newName, setNewName] = useState("");
+
+  const add = () => { if (newName.trim() && !items.includes(newName.trim())) { setItems([...items, newName.trim()]); setNewName(""); } };
+  const remove = (idx: number) => setItems(items.filter((_, i) => i !== idx));
+  const edit = (idx: number, val: string) => { const next = [...items]; next[idx] = val; setItems(next); };
+
+  const handleSave = async () => {
+    await fetchApi("/api/projects/types", { method: "PUT", body: JSON.stringify({ names: items }) });
+    await fetchApi("/api/settings", { method: "PATCH", body: JSON.stringify({ section: "storage", key: "projCats", value: items.map((n, i) => ({ id: `p${i + 1}`, name: n, color: "#6B7280" })) }) });
+    await mutate(); mutateSettings(); onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-tu-surface w-full max-w-md rounded-[20px] border border-tu-border shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-tu-border">
+          <div><h2 className="text-base font-semibold text-tu-text-primary">จัดการประเภทโครงการ</h2><p className="text-xs text-tu-text-muted mt-0.5">เพิ่ม แก้ไข ลบประเภทโครงการ</p></div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-tu-text-muted hover:bg-tu-bg"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-3 max-h-[55vh] overflow-y-auto">
+          {items.map((n, i) => (
+            <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-tu-bg">
+              <span className="h-3 w-3 rounded-full bg-tu-primary shrink-0" />
+              <input type="text" value={n} onChange={e => edit(i, e.target.value)} className="bg-transparent text-sm flex-1 outline-none text-tu-text-primary" />
+              <button onClick={() => remove(i)} className="p-1 rounded-md text-tu-text-muted hover:text-tu-error hover:bg-tu-error/10"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2 border-t border-tu-border">
+            <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="ชื่อประเภท..." className="rounded-[10px] border border-tu-border bg-tu-surface px-3 py-2 text-sm flex-1 outline-none" />
+            <button onClick={add} className="rounded-[10px] bg-tu-primary px-3 py-2 text-xs font-medium text-white hover:bg-tu-primary-hover"><Plus size={14} /></button>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-tu-border bg-tu-bg/30">
+          <button onClick={onClose} className="h-9 rounded-[10px] border border-tu-border bg-tu-surface px-4 text-sm font-medium text-tu-text-secondary">ยกเลิก</button>
+          <button onClick={handleSave} className="h-9 rounded-[10px] bg-tu-primary text-white px-4 text-sm font-medium hover:bg-tu-primary-hover shadow-sm">บันทึก</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================================================================
    Main Page
    ============================================================================== */
 
@@ -515,10 +562,12 @@ function ProjectsContent() {
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectCard | null>(null);
+  const [typeModalOpen, setTypeModalOpen] = useState(false);
 
   const canCreate = useHasPermission("PROJECTS_CREATE");
   const canApprove = useHasPermission("PROJECTS_APPROVE");
   const canDelete = useHasPermission("PROJECTS_DELETE");
+  const canManageTypes = useHasPermission("PROJECTS_MANAGE_ALL");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -613,9 +662,14 @@ function ProjectsContent() {
           <p className="mt-2 text-[14px] text-tu-text-muted max-w-2xl">จัดการโครงการของคณะ พร้อมกระดาน Kanban และมุมมองรายการ</p>
         </div>
         {canCreate && (
-          <button onClick={() => setCreateOpen(true)} className="shrink-0 h-10 px-4 rounded-[10px] bg-tu-primary text-white hover:bg-tu-primary-hover text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm transition-colors">
-            <Plus size={16} />สร้างโครงการ
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {canManageTypes && (
+              <button onClick={() => setTypeModalOpen(true)} className="h-10 px-4 rounded-xl border border-tu-border bg-tu-surface hover:bg-tu-surface-hover text-[13px] font-medium text-tu-text-secondary inline-flex items-center gap-2 transition-colors">
+                <Settings2 size={16} />จัดการประเภท
+              </button>
+            )}
+            <button onClick={() => setCreateOpen(true)} className="h-10 px-4 rounded-[10px] bg-tu-primary text-white hover:bg-tu-primary-hover text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm transition-colors"><Plus size={16} />สร้างโครงการ</button>
+          </div>
         )}
       </div>
 
@@ -677,6 +731,7 @@ function ProjectsContent() {
 
       <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} onSave={handleCreate} projectTypes={PROJECT_TYPES} />
       <ProjectFormModal key={editTarget?.id ?? "create"} open={!!editTarget} onClose={() => setEditTarget(null)} onSave={handleEdit} edit={editTarget ?? undefined} projectTypes={PROJECT_TYPES} />
+      {typeModalOpen && <ProjectTypeModal types={PROJECT_TYPES} onClose={() => setTypeModalOpen(false)} mutate={mutate} mutateSettings={() => mutate()} />}
       <ApproveModal open={approveOpen} onClose={() => setApproveOpen(false)} onAction={handleApprove} project={approveTarget} />
       <RejectModal open={rejectOpen} onClose={() => setRejectOpen(false)} onAction={handleReject} project={approveTarget} />
       <ConfirmDialog open={!!deleteTarget} title="ยืนยันลบโครงการ" message={`คุณต้องการลบ "${deleteTarget?.name ?? ""}" ใช่หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้`} confirmLabel="ลบ" variant="danger" onConfirm={handleDeleteConfirm} onCancel={() => setDeleteTarget(null)} />

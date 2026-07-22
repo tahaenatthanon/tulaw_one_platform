@@ -68,6 +68,33 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return apiError("UNAUTHORIZED", "กรุณาเข้าสู่ระบบ", 401);
+
+  try {
+    const { section, key, value } = await req.json();
+    if (!section || !key) return apiError("VALIDATION", "กรุณาระบุ section และ key");
+
+    const configKey = `${section}.${key}`;
+    const val = typeof value === "string" ? value : JSON.stringify(value);
+
+    await prisma.systemConfig.upsert({
+      where: { configKey },
+      create: { configKey, configValue: val },
+      update: { configValue: val },
+    });
+
+    // Audit log (non-fatal)
+    logAction(session.user.id, "settings", "CONFIG_UPDATE", { entityType: "SystemConfig", entityId: configKey, newValue: key });
+
+    return apiSuccess({ section, key, updated: true });
+  } catch (e) {
+    console.error("[PATCH /api/settings]", e);
+    return apiError("DB_ERROR", "ไม่สามารถแก้ไขการตั้งค่าได้");
+  }
+}
+
 export async function PUT(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const roles = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];

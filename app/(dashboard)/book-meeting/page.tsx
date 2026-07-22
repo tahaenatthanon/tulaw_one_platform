@@ -3,7 +3,7 @@
 import { useMemo, useState, Suspense, useCallback } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
-import { CalendarCheck, Building2, Clock, CalendarClock, DoorOpen, Plus } from "lucide-react";
+import { CalendarCheck, Building2, Clock, CalendarClock, DoorOpen, Plus, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { swrFetcher, fetchApi, ApiError } from "@/lib/fetcher";
 import { useHasPermission, useRoleLevel } from "@/hooks/use-permission";
@@ -86,6 +86,84 @@ function TabSelector({ active, onChange }: { active: TabId; onChange: (id: TabId
 }
 
 /* ==============================================================================
+   Room Management Modal
+   ============================================================================== */
+function RoomManageModal({ rooms, mutateRooms, onClose }: { rooms: Room[]; mutateRooms: () => void; onClose: () => void }) {
+  const [items, setItems] = useState<Array<{ id?: string; name: string; capacity: number }>>(rooms.map(r => ({ id: r.id, name: r.name, capacity: r.capacity })));
+  const [newName, setNewName] = useState(""); const [newCap, setNewCap] = useState("10");
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  const add = () => {
+    if (!newName.trim()) return;
+    setItems([...items, { name: newName.trim(), capacity: parseInt(newCap) || 10 }]);
+    setNewName(""); setNewCap("10"); setDirty(true);
+  };
+  const edit = (idx: number, field: string, val: string) => {
+    const next = [...items]; (next[idx] as any)[field] = field === "capacity" ? parseInt(val) || 10 : val; setItems(next); setDirty(true);
+  };
+  const remove = (idx: number) => { setItems(items.filter((_, i) => i !== idx)); setDirty(true); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const originalRooms = rooms;
+    const savedIds = new Set(items.filter(r => r.id).map(r => r.id!));
+
+    // Delete rooms no longer in list
+    for (const room of originalRooms) {
+      if (!savedIds.has(room.id)) {
+        await fetchApi(`/api/book-meeting/rooms?id=${room.id}`, { method: "DELETE" });
+      }
+    }
+
+    // Update only changed rooms & create new ones
+    for (const item of items) {
+      if (item.id) {
+        const orig = originalRooms.find(r => r.id === item.id);
+        if (orig && (orig.name !== item.name || orig.capacity !== item.capacity)) {
+          await fetchApi("/api/book-meeting/rooms", { method: "PUT", body: JSON.stringify({ id: item.id, name: item.name, capacity: item.capacity }) });
+        }
+      } else {
+        await fetchApi("/api/book-meeting/rooms", { method: "POST", body: JSON.stringify({ name: item.name, capacity: item.capacity }) });
+      }
+    }
+
+    await mutateRooms();
+    setSaving(false); onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-tu-surface w-full max-w-md rounded-[20px] border border-tu-border shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-tu-border">
+          <div><h2 className="text-base font-semibold text-tu-text-primary">จัดการห้องประชุม</h2><p className="text-xs text-tu-text-muted mt-0.5">เพิ่ม แก้ไข ลบห้องประชุม</p></div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-tu-text-muted hover:bg-tu-bg"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-3 max-h-[55vh] overflow-y-auto">
+          {items.map((r, i) => (
+            <div key={r.id || i} className="flex items-center gap-2 p-2 rounded-lg bg-tu-bg">
+              <Building2 size={14} className="text-tu-text-muted shrink-0" />
+              <input type="text" value={r.name} onChange={e => edit(i, "name", e.target.value)} className="bg-transparent text-sm flex-1 outline-none min-w-0" />
+              <input type="number" value={r.capacity} onChange={e => edit(i, "capacity", e.target.value)} className="bg-transparent text-sm w-12 outline-none text-right" min={1} /> คน
+              <button onClick={() => remove(i)} className="p-1 rounded-md text-tu-error hover:bg-tu-error/10"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2 border-t border-tu-border">
+            <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="ชื่อห้อง..." className="rounded-[10px] border border-tu-border bg-tu-surface px-3 py-2 text-sm flex-1 outline-none" />
+            <input type="number" value={newCap} onChange={e => setNewCap(e.target.value)} min={1} className="rounded-[10px] border border-tu-border bg-tu-surface px-3 py-2 text-sm w-16 outline-none" />
+            <button onClick={add} className="rounded-[10px] bg-tu-primary px-3 py-2 text-xs font-medium text-white hover:bg-tu-primary-hover"><Plus size={14} /></button>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-tu-border bg-tu-bg/30">
+          <button onClick={onClose} className="h-9 rounded-[10px] border border-tu-border bg-tu-surface px-4 text-sm font-medium text-tu-text-secondary">ยกเลิก</button>
+          <button onClick={handleSave} disabled={saving} className="h-9 rounded-[10px] bg-tu-primary text-white px-4 text-sm font-medium hover:bg-tu-primary-hover shadow-sm disabled:opacity-50">{saving ? "กำลังบันทึก..." : "บันทึก"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================================================================
    Main Content
    ============================================================================== */
 
@@ -101,6 +179,7 @@ function BookMeetingContent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [presetRoom, setPresetRoom] = useState<Room | null>(null);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
+  const [roomModalOpen, setRoomModalOpen] = useState(false);
 
   const { data: session } = useSession();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? "";
@@ -173,7 +252,14 @@ function BookMeetingContent() {
           <h1 className="mt-3 truncate text-[26px] sm:text-[32px] font-semibold tracking-tight leading-tight text-tu-text-primary">Book Meeting</h1>
           <p className="mt-2 text-[14px] text-tu-text-muted max-w-2xl">บริหารจัดการห้องประชุมของคณะนิติศาสตร์ · ตรวจสอบสถานะห้อง จองล่วงหน้า และดูตารางประชุมได้ในที่เดียว</p>
         </div>
-        {canCreate && <button onClick={() => openCreate(null)} className="shrink-0 h-10 px-4 rounded-xl bg-tu-primary text-white hover:bg-tu-primary-hover text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm transition-colors"><Plus className="h-4 w-4" />จองห้องประชุม</button>}
+        <div className="flex items-center gap-2 shrink-0">
+          {canApprove && (
+            <button onClick={() => setRoomModalOpen(true)} className="h-10 px-4 rounded-xl border border-tu-border bg-tu-surface hover:bg-tu-surface-hover text-[13px] font-medium text-tu-text-secondary inline-flex items-center gap-2 transition-colors">
+              <Building2 className="h-4 w-4" />จัดการห้องประชุม
+            </button>
+          )}
+          {canCreate && <button onClick={() => openCreate(null)} className="h-10 px-4 rounded-xl bg-tu-primary text-white hover:bg-tu-primary-hover text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm transition-colors"><Plus className="h-4 w-4" />จองห้องประชุม</button>}
+        </div>
       </div>
 
       <div><TabSelector active={activeTab} onChange={setActiveTab} /></div>
@@ -212,6 +298,7 @@ function BookMeetingContent() {
 
       <BookingDetailSheet booking={selectedBooking} rooms={rooms} open={detailOpen} onOpenChange={setDetailOpen} />
       <CreateBookingDialog open={createOpen} onOpenChange={setCreateOpen} rooms={rooms} bookings={bookings} presetRoom={presetRoom} mode={editBooking ? "edit" : "create"} editingBooking={editBooking} onCreate={handleCreate} onUpdate={handleUpdate} userName={displayName} />
+      {roomModalOpen && <RoomManageModal rooms={rooms} mutateRooms={mutateRooms} onClose={() => setRoomModalOpen(false)} />}
     </div>
   );
 }

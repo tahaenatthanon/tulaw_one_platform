@@ -15,7 +15,7 @@ import { useUrlState } from "@/hooks/use-url-state";
    Types
    ============================================================================== */
 
-type TabId = "auth" | "sso" | "branding" | "storage" | "api-keys" | "categories" | "rooms" | "app-status";
+type TabId = "auth" | "sso" | "branding" | "storage" | "api-keys";
 
 interface Category { id: string; name: string; color: string; }
 
@@ -31,9 +31,6 @@ const TABS: { id: TabId; label: string; icon: typeof Settings }[] = [
   { id: "branding", label: "UI Branding", icon: Palette },
   { id: "storage", label: "Storage & Projects", icon: HardDrive },
   { id: "api-keys", label: "API Keys", icon: Plug },
-  { id: "categories", label: "Categories", icon: Database },
-  { id: "rooms", label: "Meeting Rooms", icon: Building2 },
-  { id: "app-status", label: "App Status", icon: Monitor },
 ];
 
 const BRAND_COLORS = ["#A31D1D", "#FDB813", "#2563EB", "#16A34A", "#DC2626", "#7C3AED", "#DB2777", "#0284C7"];
@@ -470,9 +467,6 @@ function SettingsContent() {
         {activeTab === "branding" && <BrandingTab form={brandingForm} onChange={(f) => { setBrandingForm(f); markDirty(); }} />}
         {activeTab === "storage" && <StorageSettingsTab form={storageForm} onChange={(f) => { setStorageForm(f); markDirty(); }} />}
         {activeTab === "api-keys" && <ApiKeysTabWrapper />}
-        {activeTab === "categories" && <CategoriesTabWrapper annCats={storageForm.annCats} projCats={storageForm.projCats} onChange={(a, p) => { setStorageForm({ ...storageForm, annCats: a, projCats: p }); markDirty(); }} />}
-        {activeTab === "rooms" && <MeetingRoomsTab />}
-        {activeTab === "app-status" && <AppStatusTab />}
       </div>
     </div>
   );
