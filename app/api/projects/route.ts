@@ -72,10 +72,11 @@ export async function GET(req: NextRequest) {
       description: project.description ?? "",
       type: project.projectType.name,
       column: project.status as "planning" | "in_progress" | "pending_approval" | "completed",
+      priority: project.priority ?? "medium",
       progress: project.status === "completed" ? 100 : project.status === "pending_approval" ? 90 : project.status === "in_progress" ? 50 : 0,
       owner: `${project.owner.firstNameTh} ${project.owner.lastNameTh}`,
+      startDate: project.startDate?.toISOString() ?? "",
       deadline: project.endDate?.toISOString() ?? new Date().toISOString(),
-      tasks: project.members.length,
       members: project.members.map((m) => ({
         userId: m.userId,
         name: `${m.user.firstNameTh} ${m.user.lastNameTh}`,
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { name, type, description, memberIds } = body;
+    const { name, type, description, priority, startDate, deadline, memberIds } = body;
     if (!name?.trim()) return apiError("VALIDATION", "กรุณาระบุชื่อโครงการ");
 
     const projectType = await prisma.projectType.findFirst({ where: { name: type ?? "ทั่วไป" } });
@@ -109,6 +110,9 @@ export async function POST(req: NextRequest) {
         description: description ?? "",
         projectTypeId: projectType?.id ?? 1,
         status: "planning",
+        priority: priority ?? "medium",
+        startDate: parseDate(startDate),
+        endDate: parseDate(deadline),
         ownerUserId: session.user.id,
         createdBy: session.user.id,
       },
@@ -145,7 +149,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, status, name, description } = body;
+    const { id, status, name, description, type, startDate, deadline, priority } = body;
     if (!id) return apiError("VALIDATION", "กรุณาระบุ ID");
 
     // Non-admin users can only edit their own projects
@@ -165,6 +169,16 @@ export async function PUT(req: NextRequest) {
     if (status) data.status = status;
     if (name) data.name = name.trim();
     if (description !== undefined) data.description = description;
+    if (priority) data.priority = priority;
+    if (startDate) data.startDate = parseDate(startDate);
+    if (deadline) data.endDate = parseDate(deadline);
+
+    // Resolve project type name → id
+    if (type) {
+      let pt = await prisma.projectType.findFirst({ where: { name: type } });
+      if (!pt) pt = await prisma.projectType.create({ data: { name: type } });
+      data.projectTypeId = pt.id;
+    }
 
     await prisma.project.update({ where: { id }, data });
 
@@ -189,8 +203,14 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    const action = status === "completed" ? "PROJECT_APPROVE" : status === "rejected" ? "PROJECT_REJECT" : "PROJECT_UPDATE";
-    await logAction(session.user.id, "projects", action, { entityType: "Project", entityId: id });
+    // Determine audit action type
+    let auditAction = "PROJECT_UPDATE";
+    if (status === "completed") auditAction = "PROJECT_APPROVE";
+    else if (status === "planning" && description) {
+      // Reject: moved from pending_approval to planning with a reason
+      auditAction = "PROJECT_REJECT";
+    }
+    await logAction(session.user.id, "projects", auditAction, { entityType: "Project", entityId: id });
     return apiSuccess({ updated: true });
   } catch (e: unknown) {
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
@@ -209,6 +229,13 @@ function dedupeMembers(list: { userId: string; role?: string }[]) {
     seen.add(m.userId);
     return true;
   });
+}
+
+/** Parse date string as UTC date (prevents timezone offset from shifting the date). */
+function parseDate(d?: string): Date | undefined {
+  if (!d) return undefined;
+  // "2026-07-31" → new Date("2026-07-31T00:00:00.000Z") — UTC midnight, so @db.Date extracts the correct day
+  return new Date(d + "T00:00:00.000Z");
 }
 
 export async function DELETE(req: NextRequest) {

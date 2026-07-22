@@ -19,7 +19,8 @@ export async function GET() {
       }),
       prisma.roomBooking.findMany({
         where: {
-          status: { in: ["confirmed", "pending"] },
+          // Only confirmed bookings affect room status — pending don't mark room as booked
+          status: "confirmed",
           endTime: { gt: now },
         },
         select: { roomId: true, startTime: true },

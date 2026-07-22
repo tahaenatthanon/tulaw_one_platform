@@ -1,11 +1,13 @@
 ﻿import { Suspense } from "react";
 import { LoginForm } from "./login-form";
 
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
-  const azureAdEnabled = !!(
-    process.env.AUTH_MICROSOFT_ENTRA_ID_ID &&
-    process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET
-  );
+  // Support both old (NextAuth) and new env var names
+  const clientId = process.env.MICROSOFT_CLIENT_ID || process.env.AUTH_MICROSOFT_ENTRA_ID_ID;
+  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET || process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET;
+  const azureAdEnabled = !!(clientId && clientSecret);
 
   return (
     <Suspense

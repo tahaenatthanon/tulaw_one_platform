@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission, requireMinRoleLevel } from "@/lib/auth-guard";
 import { ROLE_LEVELS, type RoleCode } from "@/lib/permissions";
 import { apiSuccess, apiError, parsePagination } from "@/lib/api-utils";
+import { createAuditLog } from "@/lib/audit-log";
 
 export async function GET(req: NextRequest) {
   const session = await requirePermission("BOOK_MEETING_VIEW");
@@ -36,6 +37,8 @@ export async function GET(req: NextRequest) {
     notes: b.remark ?? "",
     status: b.status,
     userId: b.userId,
+    bookerName: b.user ? `${b.user.firstNameTh} ${b.user.lastNameTh}` : null,
+    statusLog: b.statusLog ?? [],
   }));
 
   return apiSuccess(mapped, { total, page, limit });
@@ -62,6 +65,10 @@ export async function POST(req: NextRequest) {
         createdBy: session.user.id,
       },
     });
+
+    // Audit log (non-fatal)
+    createAuditLog({ userId: session.user.id, module: "BOOK_MEETING", action: "CREATE", entityType: "RoomBooking", entityId: booking.id });
+
     return apiSuccess(booking);
   } catch (e: unknown) {
     console.error("[POST /api/book-meeting]", e);
@@ -79,30 +86,74 @@ export async function PUT(req: NextRequest) {
     const isApprove = !title && startTime === undefined && endTime === undefined && attendeeCount === undefined && roomId === undefined && purpose === undefined && notes === undefined;
 
     if (isApprove) {
-      // --- Approve mode: only status change, requires BOOK_MEETING_APPROVE ---
-      const session = await requirePermission("BOOK_MEETING_APPROVE");
-      if (!session) return apiError("UNAUTHORIZED", "ไม่มีสิทธิ์อนุมัติ", 403);
+      // --- Approve mode: only status change ---
+      // Requires BOOK_MEETING_APPROVE, OR the user is cancelling their own booking
+      const approveSession = await requirePermission("BOOK_MEETING_APPROVE");
+
+      // Allow self-cancel without BOOK_MEETING_APPROVE
+      if (!approveSession && status === "cancelled") {
+        const editSession = await getServerSession(authOptions);
+        if (!editSession?.user?.email) return apiError("UNAUTHORIZED", "กรุณาเข้าสู่ระบบ", 401);
+        const ownBooking = await prisma.roomBooking.findUnique({ where: { id } });
+        if (!ownBooking || ownBooking.userId !== (editSession.user as { id: string }).id) {
+          return apiError("FORBIDDEN", "คุณสามารถยกเลิกได้เฉพาะการจองของตนเอง", 403);
+        }
+        const booking = await prisma.roomBooking.update({ where: { id }, data: { status: "cancelled", updatedBy: (editSession.user as { id: string }).id } });
+        createAuditLog({ userId: (editSession.user as { id: string }).id, module: "BOOK_MEETING", action: "CANCEL", entityType: "RoomBooking", entityId: id });
+        return apiSuccess(booking);
+      }
+
+      if (!approveSession) return apiError("UNAUTHORIZED", "ไม่มีสิทธิ์อนุมัติ", 403);
       if (!status) return apiError("VALIDATION", "กรุณาระบุสถานะ");
 
-      const booking = await prisma.roomBooking.update({ where: { id }, data: { status, updatedBy: session.user.id } });
+      // Get previous status and existing statusLog before update
+      const prevBooking = await prisma.roomBooking.findUnique({ where: { id }, select: { status: true, title: true, userId: true, statusLog: true } });
+      const prevStatus = prevBooking?.status ?? "pending";
+      const existingLog = Array.isArray(prevBooking?.statusLog) ? prevBooking.statusLog : [];
 
-      // Send notification when booking is confirmed (non-fatal)
-      if (status === "confirmed") {
+      const booking = await prisma.roomBooking.update({
+        where: { id },
+        data: {
+          status,
+          updatedBy: approveSession.user.id,
+          statusLog: [
+            ...existingLog,
+            {
+              action: status === "confirmed" ? "approved" : "rejected",
+              prevStatus,
+              newStatus: status,
+              performedBy: approveSession.user.id,
+              performedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      });
+
+      // Audit log
+      const auditAction = status === "confirmed" ? "APPROVE" : "REJECT";
+      createAuditLog({ userId: approveSession.user.id, module: "BOOK_MEETING", action: auditAction, entityType: "RoomBooking", entityId: id });
+
+      // Send notification for approve or reject (non-fatal)
+      const targetBooking = prevBooking;
+      if (targetBooking) {
         try {
-          const targetBooking = await prisma.roomBooking.findUnique({ where: { id }, select: { userId: true, title: true } });
-          if (targetBooking) {
-            const notif = await prisma.notification.create({
-              data: {
-                title: "การจองห้องประชุมได้รับการอนุมัติ",
-                message: `การจอง "${targetBooking.title}" ของคุณได้รับการอนุมัติแล้ว`,
-                actionUrl: "/book-meeting?tab=my-bookings",
-                createdBy: session.user.id,
-              },
-            });
-            await prisma.notificationRead.createMany({
-              data: [{ notificationId: notif.id, userId: targetBooking.userId, isRead: false }],
-            });
-          }
+          const notifTitle = status === "confirmed"
+            ? "การจองห้องประชุมได้รับการอนุมัติ"
+            : "การจองห้องประชุมถูกปฏิเสธ";
+          const notifMessage = status === "confirmed"
+            ? `การจอง "${targetBooking.title}" ของคุณได้รับการอนุมัติแล้ว`
+            : `การจอง "${targetBooking.title}" ของคุณถูกปฏิเสธ`;
+          const notif = await prisma.notification.create({
+            data: {
+              title: notifTitle,
+              message: notifMessage,
+              actionUrl: "/book-meeting?tab=my-bookings",
+              createdBy: approveSession.user.id,
+            },
+          });
+          await prisma.notificationRead.createMany({
+            data: [{ notificationId: notif.id, userId: targetBooking.userId, isRead: false }],
+          });
         } catch (notifErr) {
           console.error("[PUT /api/book-meeting] notification failed (non-fatal):", notifErr);
         }
@@ -158,6 +209,10 @@ export async function PUT(req: NextRequest) {
     updateData.status = newStatus;
 
     const booking = await prisma.roomBooking.update({ where: { id }, data: updateData });
+
+    // Audit log for edit (non-fatal)
+    createAuditLog({ userId: session.user?.id, module: "BOOK_MEETING", action: "UPDATE", entityType: "RoomBooking", entityId: id, oldValue: JSON.stringify({ title: existing.title, status: existing.status, roomId: existing.roomId }), newValue: JSON.stringify(updateData) });
+
     return apiSuccess(booking);
   } catch (e: unknown) {
     console.error("[PUT /api/book-meeting]", e);

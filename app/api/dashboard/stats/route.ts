@@ -122,7 +122,12 @@ export async function GET(_req: NextRequest) {
         }))
       : [] as { id: string; title: string; category: string; publishDate: string; status: string }[];
 
-    const announcementCategories = numArr(categories).map((c: { name: string }) => c.name);
+    // Map announcement categories with colors from ID-based palette
+    // (AnnouncementCategory has no colorCode field — colors derived from category ID)
+    const CAT_COLORS = ["#A31D1D", "#0D9488", "#2563EB", "#D97706", "#7C3AED", "#DB2777", "#0891B2", "#65A30D"];
+    const announcementCategories = numArr(categories).map((c: { id: number; name: string }) => ({
+      id: String(c.id), name: c.name, color: CAT_COLORS[(c.id - 1) % CAT_COLORS.length],
+    }));
     const deptNameById = new Map(numArr(departments).map((d: { id: number; name: string }) => [d.id, d.name]));
 
     const userProportionByDept = numArr(userGroup).map((g: { departmentId: number; _count: { _all: number } }) => ({

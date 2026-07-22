@@ -150,14 +150,14 @@ function DocumentsContent() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-tu-text-primary">Document</h1>
-          <p className="text-tu-text-muted text-sm mt-1">ระบบจัดการเอกสาร 3 ระดับ · รองรับ PDF, XLSX, PPTX, DOCX, PNG, JPG</p>
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="mt-3 truncate text-[26px] sm:text-[32px] font-semibold tracking-tight leading-tight text-tu-text-primary">Document</h1>
+          <p className="mt-2 text-[14px] text-tu-text-muted max-w-2xl">ระบบจัดการเอกสาร 3 ระดับ · รองรับ PDF, XLSX, PPTX, DOCX, PNG, JPG</p>
         </div>
         {canUpload && (
-          <button onClick={() => { setUploadModal(true); setUploadFile(null); }} className="inline-flex items-center gap-2 rounded-[--radius-btn] bg-tu-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors">
-            <Upload size={18} />อัปโหลดเอกสาร
+          <button onClick={() => { setUploadModal(true); setUploadFile(null); }} className="h-10 px-4 rounded-xl bg-tu-primary text-white hover:bg-tu-primary-hover text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm transition-colors">
+            <Upload size={16} />อัปโหลดเอกสาร
           </button>
         )}
       </div>
@@ -177,9 +177,6 @@ function DocumentsContent() {
           </div>
           <Badge variant={pct > 80 ? "destructive" : "success"}>{pct}%</Badge>
         </div>
-        <p className="text-[10px] text-tu-text-muted text-right">
-          🛡 Audit Trail: ทุกการเข้าถึงและแก้ไขเอกสารถูกบันทึก — {filtered.length} รายการที่คุณเข้าถึงได้
-        </p>
       </div>
 
       {/* Search bar */}
@@ -198,7 +195,7 @@ function DocumentsContent() {
 
       {/* Document Table */}
       <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border overflow-hidden">
-        <table className="w-full">
+        <table className="w-full border-separate border-spacing-0 rounded-[--radius-card] overflow-hidden">
           <thead>
             <tr className="bg-tu-bg border-b border-tu-border text-left">
               <th className="px-4 py-3 text-xs font-semibold text-tu-text-secondary uppercase">ชื่อไฟล์</th>

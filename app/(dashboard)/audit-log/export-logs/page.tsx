@@ -17,7 +17,7 @@ export default function ExportLogsPage() {
           {[
             { label: "วันที่เริ่มต้น", key: "dateFrom", type: "date" },
             { label: "วันที่สิ้นสุด", key: "dateTo", type: "date" },
-            { label: "ประเภทเหตุการณ์", key: "eventType", type: "select", options: ["", "USER_LOGIN", "USER_LOGIN_FAILED", "DOC_UPLOAD", "CONFIG_UPDATE", "PROJECT_APPROVE", "AD_SYNC", "ROLE_CREATE"], labels: ["ทั้งหมด", "เข้าสู่ระบบ", "เข้าสู่ระบบล้มเหลว", "อัปโหลดเอกสาร", "แก้ไขตั้งค่า", "อนุมัติโครงการ", "ซิงค์ AD", "สร้างบทบาท"] },
+            { label: "ประเภทเหตุการณ์", key: "eventType", type: "select", options: ["", "AD_SYNC", "CONFIG_UPDATE", "DOC_DELETE", "DOC_DOWNLOAD", "DOC_UPLOAD", "PROJECT_APPROVE", "ROLE_CREATE", "USER_LOGIN", "USER_LOGIN_FAILED"], labels: ["ทั้งหมด", "ซิงค์ AD", "แก้ไขตั้งค่า", "ลบเอกสาร", "ดาวน์โหลดเอกสาร", "อัปโหลดเอกสาร", "อนุมัติโครงการ", "สร้างบทบาท", "เข้าสู่ระบบ", "เข้าสู่ระบบล้มเหลว"] },
             { label: "ชื่อผู้ใช้", key: "user", type: "text", placeholder: "ค้นหาผู้ใช้..." },
             { label: "IP Address", key: "ip", type: "text", placeholder: "เช่น 192.168.1.1" },
           ].map((f) => (

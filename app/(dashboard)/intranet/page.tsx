@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { swrFetcher } from "@/lib/fetcher";
-import { fetchApi } from "@/lib/fetcher";
+import { fetchApi, ApiError } from "@/lib/fetcher";
+import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useHasPermission } from "@/hooks/use-permission";
 
@@ -143,11 +144,15 @@ function EditModal({ open, onClose, onSave, ann, categories }: {
     }
   }, [ann]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim() || !ann) return;
-    onSave(ann.id, title.trim(), content.trim(), cat);
-    setTitle(""); setContent(""); setCat("ประกาศด่วน"); setFileName(null);
-    onClose();
+    try {
+      await onSave(ann.id, title.trim(), content.trim(), cat);
+      setTitle(""); setContent(""); setCat("ประกาศด่วน"); setFileName(null);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "ไม่สามารถแก้ไขประกาศได้");
+    }
   };
 
   if (!open || !ann) return null;
@@ -438,10 +443,14 @@ function EventEditModal({ open, onClose, onSave, event }: {
     }
   }, [event]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim()) return;
-    onSave(title.trim(), cat, `${startTime} - ${endTime}`);
-    onClose();
+    try {
+      await onSave(title.trim(), cat, `${startTime} - ${endTime}`);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "ไม่สามารถแก้ไขกิจกรรมได้");
+    }
   };
 
   if (!open || !event) return null;
@@ -645,7 +654,7 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
   };
 
   const handleCreate = async (title: string, content: string, category: string) => {
-    try { await fetchApi("/api/announcements", { method: "POST", body: JSON.stringify({ title, content, category }) }); } catch {}
+    try { await fetchApi("/api/announcements", { method: "POST", body: JSON.stringify({ title, content, category }) }); } catch (e) { toast.error(e instanceof ApiError ? e.message : "ไม่สามารถสร้างประกาศได้"); }
     await onMutate();
   };
 
@@ -655,13 +664,14 @@ function AnnouncementsTab({ announcements, canCreate, canEdit, canDelete, curren
   };
 
   const handleEditSave = async (id: string, title: string, content: string, category: string) => {
-    try { await fetchApi("/api/announcements", { method: "PUT", body: JSON.stringify({ id, title, content, category }) }); } catch {}
+    await fetchApi("/api/announcements", { method: "PUT", body: JSON.stringify({ id, title, content, category }) });
+    toast.success("แก้ไขประกาศสำเร็จ");
     await onMutate();
   };
 
   const handleDelete = async (id: string) => {
     setDeleting(id);
-    try { await fetchApi(`/api/announcements?id=${id}`, { method: "DELETE" }); } catch {}
+    try { await fetchApi(`/api/announcements?id=${id}`, { method: "DELETE" }); } catch (e) { toast.error(e instanceof ApiError ? e.message : "ไม่สามารถลบประกาศได้"); }
     setDeleting(null);
     setDeleteTarget(null);
     await onMutate();
@@ -934,7 +944,7 @@ function CalendarTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: bool
     try {
       const res = await fetchApi("/api/intranet/calendar", { method: "POST", body: JSON.stringify({ title, category, time, day, month: calMonth, year: calYear }) });
       setEvents(prev => [{ ...(res as unknown as CalendarEvent), day, month: calMonth, year: calYear }, ...prev]);
-    } catch { /* fallback */ }
+    } catch (e) { toast.error(e instanceof ApiError ? e.message : "ไม่สามารถเพิ่มกิจกรรมได้"); }
   };
 
   const handleEdit = (ev: CalendarEvent) => {
@@ -945,15 +955,15 @@ function CalendarTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: bool
     try {
       await fetchApi("/api/intranet/calendar", { method: "PUT", body: JSON.stringify({ id, title, category, time }) });
       setEvents(prev => prev.map(e => e.id === id ? { ...e, title, category, time } : e));
-    } catch { /* fallback */ }
-    setEditEvent(null);
+      setEditEvent(null);
+    } catch (e) { toast.error(e instanceof ApiError ? e.message : "ไม่สามารถแก้ไขกิจกรรมได้"); }
   };
 
   const handleDelete = async (id: string) => {
     try {
       await fetchApi(`/api/intranet/calendar?id=${id}`, { method: "DELETE" });
       setEvents(prev => prev.filter(e => e.id !== id));
-    } catch { /* fallback */ }
+    } catch (e) { toast.error(e instanceof ApiError ? e.message : "ไม่สามารถลบกิจกรรมได้"); }
     setCalDeleteTarget(null);
   };
 
@@ -1195,7 +1205,7 @@ function IntranetContent() {
     <div className="p-6 space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-[28px] font-semibold text-tu-text-primary leading-tight">อินทราเน็ตคณะ</h1>
+        <h1 className="text-[28px] font-semibold text-tu-text-primary leading-tight">Intranet</h1>
         <p className="text-tu-text-muted text-sm mt-1">ศูนย์กลางข่าวสาร การสื่อสาร และข้อมูลภายในคณะนิติศาสตร์</p>
       </div>
 

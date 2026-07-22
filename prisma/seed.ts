@@ -350,7 +350,7 @@ async function main(): Promise<void> {
   console.log(`✅ Documents: เพิ่ม ${docCount} รายการ`);
 
   // ประเภทโครงการ + โครงการ
-  const projectTypeNames = ["วิชาการ", "วิจัย", "ไอที", "งบประมาณ"];
+  const projectTypeNames = ["วิชาการ", "หลักสูตร", "สัมมนา", "วิจัย", "IT", "งบประมาณ"];
   const projectTypeMap: Record<string, number> = {};
   for (const name of projectTypeNames) {
     const pt = await prisma.projectType.findFirst({ where: { name } });
@@ -360,13 +360,13 @@ async function main(): Promise<void> {
   }
 
   const projectSeed: Array<{ name: string; type: string; ownerIdx: number; monthsAgo: number; status: string }> = [
-    { name: "พัฒนาระบบจองห้องประชุมออนไลน์", type: "ไอที", ownerIdx: 0, monthsAgo: 0, status: "in_progress" },
-    { name: "ปรับปรุงหลักสูตรกฎหมายธุรกิจ", type: "วิชาการ", ownerIdx: 3, monthsAgo: 1, status: "in_progress" },
+    { name: "พัฒนาระบบจองห้องประชุมออนไลน์", type: "IT", ownerIdx: 0, monthsAgo: 0, status: "in_progress" },
+    { name: "ปรับปรุงหลักสูตรกฎหมายธุรกิจ", type: "หลักสูตร", ownerIdx: 3, monthsAgo: 1, status: "in_progress" },
     { name: "โครงการวิจัยกฎหมายดิจิทัล", type: "วิจัย", ownerIdx: 4, monthsAgo: 2, status: "planning" },
-    { name: "ปรับปรุงระบบเครือข่ายคณะ", type: "ไอที", ownerIdx: 1, monthsAgo: 3, status: "completed" },
+    { name: "งานสัมมนากฎหมายระหว่างประเทศ", type: "สัมมนา", ownerIdx: 1, monthsAgo: 3, status: "completed" },
     { name: "จัดทำคู่มือซ่อมบำรุง", type: "งบประมาณ", ownerIdx: 7, monthsAgo: 4, status: "in_progress" },
     { name: "ศึกษาความพึงพอใจนักศึกษา", type: "วิชาการ", ownerIdx: 5, monthsAgo: 5, status: "planning" },
-    { name: "ระบบแจ้งซ่อมออนไลน์", type: "ไอที", ownerIdx: 2, monthsAgo: 6, status: "in_progress" },
+    { name: "ระบบแจ้งซ่อมออนไลน์", type: "IT", ownerIdx: 2, monthsAgo: 6, status: "in_progress" },
     { name: "โครงการทุนการศึกษา", type: "งบประมาณ", ownerIdx: 6, monthsAgo: 1, status: "planning" },
   ];
   let projCount = 0;
@@ -375,10 +375,11 @@ async function main(): Promise<void> {
     if (exists) continue;
     await prisma.project.create({
       data: {
-        projectTypeId: projectTypeMap[p.type],
+        projectTypeId: projectTypeMap[p.type] ?? 1,
         name: p.name,
         description: `รายละเอียดโครงการ ${p.name}`,
         status: p.status,
+        priority: "medium",
         ownerUserId: createdUserIds[p.ownerIdx % createdUserIds.length],
         createdAt: monthsAgo(p.monthsAgo),
       },

@@ -102,7 +102,7 @@ function ApplicationHubContent() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div><h1 className="text-2xl font-semibold text-tu-text-primary">ศูนย์กลางแอปพลิเคชัน</h1><p className="text-tu-text-muted text-sm mt-1">รวมระบบงานทั้งหมดของคณะนิติศาสตร์ไว้ในจุดเดียว</p></div>
+      <div><h1 className="text-2xl font-semibold text-tu-text-primary">Application Hub</h1><p className="text-tu-text-muted text-sm mt-1">รวมระบบงานทั้งหมดของคณะนิติศาสตร์ไว้ในจุดเดียว</p></div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

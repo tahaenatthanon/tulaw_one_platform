@@ -958,6 +958,7 @@ model Project {
   name          String            @db.VarChar(255)
   description   String?           @db.Text
   status        String            @default("planning") @db.VarChar(50)
+  priority      String            @default("medium") @db.VarChar(50)
   startDate     DateTime?         @map("start_date") @db.Date
   endDate       DateTime?         @map("end_date") @db.Date
   ownerUserId   String            @map("owner_user_id") @db.Uuid
@@ -1560,6 +1561,7 @@ model RoomBooking {
   msTeamsLink   String?     @map("ms_teams_link") @db.VarChar(2048)
   status        String      @default("confirmed") @db.VarChar(50)
   remark        String?     @db.Text
+  statusLog     Json?       @map("status_log") @default("[]")
   createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt     DateTime?   @map("deleted_at") @db.Timestamptz(6)
@@ -1570,4 +1572,22 @@ model RoomBooking {
   user          User        @relation("RoomBookingUser", fields: [userId], references: [id])
 
   @@map("room_bookings")
+}
+
+// ==============================================================================
+// 23. Dashboard Stats (manual data)
+// ==============================================================================
+
+model DashboardStat {
+  id         String   @id @default(uuid()) @db.Uuid
+  department String   @db.VarChar(50)
+  statType   String   @map("stat_type") @db.VarChar(50)
+  month      String   @db.VarChar(7)
+  values     Json     @default("{}")
+  updatedBy  String?  @map("updated_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([department, statType, month])
+  @@map("dashboard_stats")
 }

@@ -3,6 +3,7 @@ import { apiSuccess, apiError, parsePagination } from "@/lib/api-utils";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { hasPermission, ROLE_LEVELS, type RoleCode } from "@/lib/permissions";
+import { createAuditLog } from "@/lib/audit-log";
 import type { NextRequest } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -115,6 +116,9 @@ export async function POST(req: Request) {
       }
     }
 
+    // Audit log (non-fatal)
+    createAuditLog({ userId: session.user.id, module: "INTRANET", action: "Announcement_Created", entityType: "Announcement", entityId: ann.id, newValue: title.trim() });
+
     return apiSuccess(ann);
   } catch (e: unknown) {
     console.error("[POST /api/announcements]", e);
@@ -147,15 +151,28 @@ export async function PUT(req: Request) {
       return apiError("FORBIDDEN", "คุณสามารถแก้ไขได้เฉพาะประกาศของตนเอง", 403);
     }
 
+    // Resolve category name to ID (same logic as POST)
+    let categoryId: number | undefined;
+    if (category) {
+      let cat = await prisma.announcementCategory.findFirst({ where: { name: category } });
+      if (!cat) {
+        cat = await prisma.announcementCategory.create({ data: { name: category, isActive: true } });
+      }
+      categoryId = cat.id;
+    }
+
     const updated = await prisma.announcement.update({
       where: { id },
       data: {
         title: title.trim(),
         content: content ?? ann.content,
-        categoryId: category ? Number(category) : ann.categoryId,
+        categoryId: categoryId ?? ann.categoryId,
       },
       include: { category: true, department: true },
     });
+
+    // Audit log (non-fatal)
+    createAuditLog({ userId: session.user.id, module: "INTRANET", action: "Announcement_Update", entityType: "Announcement", entityId: id, newValue: title.trim() });
 
     return apiSuccess(updated);
   } catch (e: unknown) {
@@ -189,6 +206,9 @@ export async function DELETE(req: Request) {
       where: { id },
       data: { deletedAt: new Date(), deletedBy: session.user.id },
     });
+
+    // Audit log (non-fatal)
+    createAuditLog({ userId: session.user.id, module: "INTRANET", action: "Announcement_Delete", entityType: "Announcement", entityId: id });
 
     return apiSuccess({ deleted: true });
   } catch (e: unknown) {

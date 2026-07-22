@@ -8,7 +8,7 @@ import {
   Users, GraduationCap, Cpu,
   Newspaper, ExternalLink, BarChart3, TrendingUp, ArrowUpRight,
   PieChart, Activity, RefreshCw, FlaskConical, TrendingDown, ChevronRight, X,
-  ClipboardList,
+  ClipboardList, Pencil, Save, Ban,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart as RPieChart, Pie, Cell,
@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { swrFetcher } from "@/lib/fetcher";
-import { useHasMinRoleLevel } from "@/hooks/use-permission";
+import { useHasMinRoleLevel, useHasPermission } from "@/hooks/use-permission";
 import { useChartPalette } from "@/hooks/use-chart-colors";
 import { ChartTooltip, SimpleTooltip } from "@/components/charts/chart-tooltip";
 
@@ -51,6 +51,15 @@ interface DashboardData {
 }
 
 type ViewId = "overview" | "weekly" | "trend" | "proportion" | "comparison";
+
+type EditableViewId = Exclude<ViewId, "overview" | "comparison">;
+
+interface EditState {
+  isEditing: boolean;
+  type: EditableViewId | null;
+  month: string;
+  values: WeeklyPoint[] | ProportDept[] | { labels: string[]; documents: number[]; bookings: number[]; projects: number[] } | null;
+}
 
 /* ==============================================================================
    Constants
@@ -699,6 +708,164 @@ function DeptChartPanel({ view, dept }: { view: ViewId; dept: DeptKey }) {
 }
 
 /* ==============================================================================
+   Edit Mode Panel — renders input fields for chart data
+   ============================================================================== */
+
+const THAI_MONTHS_FOR_SELECT = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
+
+function generateMonthOptions(): { label: string; value: string }[] {
+  const now = new Date();
+  const options: { label: string; value: string }[] = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const y = d.getFullYear() + 543; // Buddhist year
+    const m = THAI_MONTHS_FOR_SELECT[d.getMonth()];
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    options.push({ label: `${m} ${y}`, value });
+  }
+  return options;
+}
+
+type EditModePanelProps = {
+  type: EditableViewId;
+  month: string;
+  values: WeeklyPoint[] | ProportDept[] | MonthlyTrend;
+  dept: DeptKey;
+  onSave: (data: unknown) => Promise<void>;
+  onCancel: () => void;
+  saving: boolean;
+  setMonth: (m: string) => void;
+  setValues: (v: unknown) => void;
+};
+
+function EditModePanel({ type, month, values, onSave, onCancel, saving, setMonth, setValues }: EditModePanelProps) {
+  const monthOptions = generateMonthOptions();
+
+  const handleWeeklyChange = (idx: number, newVal: number) => {
+    const arr = [...(values as WeeklyPoint[])];
+    arr[idx] = { ...arr[idx], value: newVal };
+    setValues(arr);
+  };
+
+  const handleProportionChange = (idx: number, newVal: number) => {
+    const arr = [...(values as ProportDept[])];
+    arr[idx] = { ...arr[idx], value: newVal };
+    setValues(arr);
+  };
+
+  const handleTrendChange = (field: "documents" | "bookings" | "projects", idx: number, newVal: number) => {
+    const arr = { ...(values as MonthlyTrend), [field]: [...(values as MonthlyTrend)[field]] };
+    arr[field][idx] = newVal;
+    setValues(arr);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Month Selector */}
+      <div className="flex items-center gap-3">
+        <label className="text-sm font-medium text-tu-text-primary">เดือนที่แก้ไข</label>
+        <select
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+          className="rounded-xl border border-tu-border bg-white px-3 py-2 text-sm text-tu-text-primary focus:border-tu-primary focus:ring-1 focus:ring-tu-primary outline-none"
+        >
+          {monthOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Editable Fields */}
+      <div className="bg-tu-bg/50 rounded-2xl border border-tu-border p-5">
+        {type === "weekly" && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-tu-text-primary mb-3">แก้ไข Weekly Data</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              {(values as WeeklyPoint[]).map((item, i) => (
+                <div key={i} className="space-y-1">
+                  <label className="text-xs font-medium text-tu-text-muted">{item.day}</label>
+                  <input
+                    type="number"
+                    value={item.value}
+                    onChange={(e) => handleWeeklyChange(i, Number(e.target.value))}
+                    className="w-full rounded-xl border border-tu-border bg-white px-3 py-2 text-sm text-tu-text-primary focus:border-tu-primary focus:ring-1 focus:ring-tu-primary outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {type === "proportion" && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-tu-text-primary mb-3">แก้ไข Proportion Data</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {(values as ProportDept[]).map((item, i) => (
+                <div key={i} className="space-y-1">
+                  <label className="text-xs font-medium text-tu-text-muted">{item.name}</label>
+                  <input
+                    type="number"
+                    value={item.value}
+                    onChange={(e) => handleProportionChange(i, Number(e.target.value))}
+                    className="w-full rounded-xl border border-tu-border bg-white px-3 py-2 text-sm text-tu-text-primary focus:border-tu-primary focus:ring-1 focus:ring-tu-primary outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {type === "trend" && (
+          <div className="space-y-5">
+            <h3 className="text-sm font-semibold text-tu-text-primary">แก้ไข Trend Data</h3>
+            {(["documents", "bookings", "projects"] as const).map((field) => (
+              <div key={field} className="space-y-2">
+                <h4 className="text-xs font-medium text-tu-text-muted capitalize">
+                  {field === "documents" ? "📄 เอกสาร" : field === "bookings" ? "📅 จองห้อง" : "📋 โครงการ"}
+                </h4>
+                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-7 gap-2">
+                  {(values as MonthlyTrend).labels.map((label, i) => (
+                    <div key={i} className="space-y-0.5">
+                      <label className="text-[10px] text-tu-text-muted">{label}</label>
+                      <input
+                        type="number"
+                        value={(values as MonthlyTrend)[field][i]}
+                        onChange={(e) => handleTrendChange(field, i, Number(e.target.value))}
+                        className="w-full rounded-lg border border-tu-border bg-white px-2 py-1.5 text-xs text-tu-text-primary focus:border-tu-primary focus:ring-1 focus:ring-tu-primary outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center gap-3 justify-end">
+        <button
+          onClick={onCancel}
+          className="flex items-center gap-1.5 rounded-xl border border-tu-border bg-white px-4 py-2 text-sm font-medium text-tu-text-secondary hover:bg-tu-surface-hover transition-colors"
+        >
+          <Ban size={16} />ยกเลิก
+        </button>
+        <button
+          onClick={() => onSave(values)}
+          disabled={saving}
+          className="flex items-center gap-1.5 rounded-xl bg-tu-primary px-4 py-2 text-sm font-medium text-white hover:bg-tu-primary-hover transition-colors disabled:opacity-60"
+        >
+          <Save size={16} />{saving ? "กำลังบันทึก..." : "บันทึก"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================================================================
    Main Page Content
    ============================================================================== */
 
@@ -708,22 +875,41 @@ function DashboardPageContent() {
   const rawDept = searchParams.get("dept") as DeptKey | null;
   const dept: DeptKey = rawDept && deptTabs.some(d => d.key === rawDept) ? rawDept : "academic";
 
+  const isSuperOrSystem = useHasMinRoleLevel(80);
   const isDeanOrHigher = useHasMinRoleLevel(70);
-  const visibleViews = isDeanOrHigher ? views : views.filter(v => v.id !== "comparison");
-  const ALLOWED_VIEWS_FILTERED: ViewId[] = isDeanOrHigher ? ALLOWED_VIEWS : ALLOWED_VIEWS.filter(v => v !== "comparison");
+  const isDeptAdminOrHigher = useHasMinRoleLevel(50);
+  const isUserOrHigher = useHasMinRoleLevel(30);
+
+  // Check DASHBOARD_EDIT permission for edit mode
+  const canEditDashboard = useHasPermission("DASHBOARD_EDIT");
+
+  // RBAC: Filter visible views based on role level (per spec dashboard-rbac-scope)
+  // Super/System/Dean (80/70): all 5 views
+  // Dept Admin (50): 4 views (Overview, Weekly, Trend, Proportion)
+  // User (30): 3 views (Overview, Weekly, Proportion)
+  // Viewer (10): 2 views (Overview, Weekly)
+  const roleBasedVisibleViews = isDeanOrHigher
+    ? views
+    : isDeptAdminOrHigher
+      ? views.filter(v => v.id !== "comparison")
+      : isUserOrHigher
+        ? views.filter(v => v.id !== "comparison" && v.id !== "trend")
+        : views.filter(v => v.id === "overview" || v.id === "weekly");
+
+  const visibleViews = roleBasedVisibleViews;
+  const ALLOWED_VIEWS_FILTERED: ViewId[] = visibleViews.map(v => v.id);
   const view: ViewId = rawView && ALLOWED_VIEWS_FILTERED.includes(rawView) ? rawView : "overview";
 
-  const { data, error: statsError, isLoading, mutate } = useSWR("/api/dashboard/stats", swrFetcher<DashboardData>, {
+  // Fetch dashboard stats (includes announcementCategories for all roles)
+  const { data, error: statsError, isLoading, mutate } = useSWR("/api/dashboard/stats", swrFetcher<DashboardData & { announcementCategories?: Array<{ id: string; name: string; color: string }> }>, {
     refreshInterval: 300000,
     revalidateOnFocus: true,
   });
 
-  // Fetch announcement categories from settings for dynamic colors
-  const { data: settingsData } = useSWR("/api/settings", swrFetcher);
-  const settings = (settingsData || {}) as Record<string, Record<string, unknown>>;
-  const storageSection = (settings.storage || {}) as Record<string, unknown>;
+  // Use announcementCategories from dashboard API (accessible by all roles)
+  // Previously used /api/settings which required SETTINGS_VIEW permission
   const annCats: Array<{ id: string; name: string; color: string }> =
-    (Array.isArray(storageSection.annCats) ? storageSection.annCats : []) as Array<{ id: string; name: string; color: string }>;
+    (data as any)?.announcementCategories ?? [];
 
   const error = statsError ? "ไม่สามารถโหลดข้อมูลแดชบอร์ดได้" : null;
   const [refreshing, setRefreshing] = useState(false);
@@ -732,11 +918,70 @@ function DashboardPageContent() {
   const setView = useCallback((v: ViewId) => { const params = new URLSearchParams(searchParams.toString()); params.set("view", v); router.push(`/dashboard?${params.toString()}`, { scroll: false }); }, [router, searchParams]);
   const setDept = useCallback((d: DeptKey) => { const params = new URLSearchParams(searchParams.toString()); params.set("dept", d); router.push(`/dashboard?${params.toString()}`, { scroll: false }); }, [router, searchParams]);
 
+  // ── Edit mode state ──
+  const [edit, setEdit] = useState<EditState>({ isEditing: false, type: null, month: "", values: null });
+  const [saving, setSaving] = useState(false);
+
+  const handleStartEdit = useCallback(() => {
+    const now = new Date();
+    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const editType = view as EditableViewId;
+
+    let initValues: WeeklyPoint[] | ProportDept[] | MonthlyTrend;
+    switch (editType) {
+      case "weekly":
+        initValues = DEPT_WEEKLY[dept].map(w => ({ ...w }));
+        break;
+      case "proportion":
+        initValues = DEPT_PROPORTION[dept].map(p => ({ ...p }));
+        break;
+      case "trend":
+        initValues = {
+          labels: [...DEPT_TREND[dept].labels],
+          documents: [...DEPT_TREND[dept].documents],
+          bookings: [...DEPT_TREND[dept].bookings],
+          projects: [...DEPT_TREND[dept].projects],
+        };
+        break;
+      default:
+        return;
+    }
+    setEdit({ isEditing: true, type: editType, month: monthStr, values: initValues });
+  }, [view, dept]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEdit({ isEditing: false, type: null, month: "", values: null });
+  }, []);
+
+  const handleSaveEdit = useCallback(async (data: unknown) => {
+    if (!edit.type) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/dashboard/stats", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: edit.type, department: dept, month: edit.month, data }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error?.message ?? "Save failed");
+      await mutate(); // revalidate SWR cache
+      setEdit({ isEditing: false, type: null, month: "", values: null });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถบันทึกข้อมูลได้");
+    } finally {
+      setSaving(false);
+    }
+  }, [edit.type, edit.month, dept, mutate]);
+
   if (isLoading) return (<div className="p-6 space-y-6"><div className="h-8 w-48 bg-tu-surface rounded animate-pulse" /><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({ length: 4 }).map((_, i) => (<div key={i} className="bg-tu-surface rounded-2xl border border-tu-border p-5 h-[120px] animate-pulse" />))}</div></div>);
   if (error) return (<div className="p-6"><div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-10 text-center"><p className="text-tu-error font-semibold mb-2">ไม่สามารถโหลดข้อมูลได้</p><p className="text-sm text-tu-text-muted mb-4">{error}</p><button onClick={() => window.location.reload()} className="rounded-[--radius-btn] bg-tu-primary text-white px-4 py-2 text-sm font-medium hover:bg-tu-primary-hover transition-colors">ลองใหม่</button></div></div>);
 
   const statValues: Record<string, number> = { personnel: data?.orgStats.personnel ?? 247, onlineSystems: 6, projects: data?.orgStats.projectsInProgress ?? 15, students: 2847 };
   const statTrends: Record<string, { value: number; isPositive: boolean } | null> = { personnel: { value: 8, isPositive: true }, onlineSystems: { value: 2, isPositive: true }, projects: { value: 5, isPositive: true }, students: { value: 3, isPositive: false } };
+
+  // Views that support editing
+  const editableViews: ViewId[] = ["weekly", "trend", "proportion"];
+  const isEditSupported = editableViews.includes(view);
 
   return (
     <div className="p-6 space-y-6">
@@ -802,7 +1047,7 @@ function DashboardPageContent() {
             {visibleViews.map((v) => (
               <button
                 key={v.id}
-                onClick={() => setView(v.id)}
+                onClick={() => { setView(v.id); if (edit.isEditing) handleCancelEdit(); }}
                 className={cn(
                   "px-4 h-9 rounded-lg text-[12.5px] font-medium transition-all",
                   view === v.id
@@ -814,11 +1059,34 @@ function DashboardPageContent() {
               </button>
             ))}
           </div>
+          {/* Edit button — only for users with DASHBOARD_EDIT permission on editable views */}
+          {canEditDashboard && isEditSupported && !edit.isEditing && (
+            <button
+              onClick={handleStartEdit}
+              className="flex items-center gap-1.5 rounded-xl border border-tu-border bg-white px-3 py-2 text-sm font-medium text-tu-text-secondary hover:bg-tu-surface-hover hover:border-tu-primary/40 transition-colors"
+            >
+              <Pencil size={15} />แก้ไข
+            </button>
+          )}
         </div>
 
-        {/* Chart */}
+        {/* Chart or Edit Mode */}
         <div className="bg-tu-surface rounded-2xl border border-tu-border shadow-sm p-5">
-          <DeptChartPanel view={view} dept={dept} />
+          {edit.isEditing && edit.type && edit.values ? (
+            <EditModePanel
+              type={edit.type}
+              month={edit.month}
+              values={edit.values}
+              dept={dept}
+              onSave={handleSaveEdit}
+              onCancel={handleCancelEdit}
+              saving={saving}
+              setMonth={(m) => setEdit((prev) => ({ ...prev, month: m }))}
+              setValues={(v) => setEdit((prev) => ({ ...prev, values: v as typeof prev.values }))}
+            />
+          ) : (
+            <DeptChartPanel view={view} dept={dept} />
+          )}
         </div>
       </div>
 
