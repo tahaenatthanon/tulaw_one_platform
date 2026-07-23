@@ -136,7 +136,10 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get("id");
   if (!id) return apiError("VALIDATION", "กรุณาระบุ ID");
 
-  const doc = await prisma.document.findUnique({ where: { id } });
+  const doc = await prisma.document.findUnique({
+    where: { id },
+    include: { storageFile: { select: { mimeType: true } } },
+  });
   if (!doc || doc.deletedAt) return apiError("NOT_FOUND", "ไม่พบเอกสาร");
   if (doc.ownerUserId !== session.user.id) {
     const roles = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];
@@ -153,7 +156,7 @@ export async function DELETE(req: NextRequest) {
   // Audit log (non-fatal)
   createAuditLog({
     userId: session.user.id, module: "DOCUMENTS", action: "DOC_DELETE", entityType: "Document", entityId: id,
-    oldValue: JSON.stringify({ title: doc.title, fileType: doc.fileType }), newValue: null,
+    oldValue: JSON.stringify({ title: doc.title, fileType: doc.storageFile.mimeType }), newValue: null,
   });
 
   return apiSuccess({ id, deleted: true });
