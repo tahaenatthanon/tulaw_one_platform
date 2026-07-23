@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, parsePagination } from "@/lib/api-utils";
 import { authOptions } from "@/lib/auth";
-import { hasPermission, type RoleCode } from "@/lib/permissions";
+import { hasPermission, ROLE_LEVELS, type RoleCode } from "@/lib/permissions";
 import { resolveDataScope } from "@/lib/data-scope";
 import { guardSystemAdminDeleteUser, guardSystemAdminChangeRole } from "@/lib/system-admin-guard";
 import { isLdapUser, canEditUser } from "@/lib/auth-source";
@@ -29,9 +29,28 @@ export async function GET(req: NextRequest) {
     const department = searchParams.get("department");
     const lastLoginBefore = searchParams.get("lastLoginBefore");
     const lastLoginAfter = searchParams.get("lastLoginAfter");
+    const sortBy = searchParams.get("sortBy") || "createdAt";
+    const sortDir = searchParams.get("sortDir") || "desc";
 
     // Apply data scope
     const scope = resolveDataScope(roles as RoleCode[], departmentId, userId);
+
+    // Build dynamic orderBy — supports direct fields + department relation
+    const orderDir = sortDir === "asc" ? ("asc" as const) : ("desc" as const);
+    const SORT_DIRECT: Record<string, object> = {
+      name: { firstNameTh: orderDir },
+      email: { email: orderDir },
+      status: { status: orderDir },
+      department: { department: { name: orderDir } },
+      createdAt: { createdAt: orderDir },
+    };
+
+    // role + lastLogin need in-memory sort (relation fields). When sorting by them,
+    // fetch ALL matching records, sort in JS, then paginate manually.
+    const needsInMemorySort = sortBy === "role" || sortBy === "lastLogin";
+    const dbTake = needsInMemorySort ? undefined : limit;
+    const dbSkip = needsInMemorySort ? 0 : skip;
+    const orderObj = SORT_DIRECT[sortBy] ?? { createdAt: orderDir };
 
     const where: Record<string, unknown> = {};
     if (search) {
@@ -65,9 +84,9 @@ export async function GET(req: NextRequest) {
     const [data, total] = await Promise.all([
       prisma.user.findMany({
         where: { ...where, ...(roleFilter || {}) },
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
+        skip: dbSkip,
+        take: dbTake,
+        orderBy: orderObj,
         include: {
           department: true,
           userRoles: { include: { role: true }, where: { isActive: true } },
@@ -78,7 +97,28 @@ export async function GET(req: NextRequest) {
       prisma.user.count({ where: { ...where, ...(roleFilter || {}) } }),
     ]);
 
-    return apiSuccess(data, { total, page, limit });
+    // In-memory sort for relation-based columns (role, lastLogin)
+    let sortedData = data;
+    if (needsInMemorySort) {
+      const dir = sortDir === "asc" ? 1 : -1;
+      sortedData = [...data].sort((a, b) => {
+        if (sortBy === "role") {
+          const levelA = ROLE_LEVELS[a.userRoles[0]?.role?.roleCode as RoleCode] ?? 0;
+          const levelB = ROLE_LEVELS[b.userRoles[0]?.role?.roleCode as RoleCode] ?? 0;
+          return (levelB - levelA) * dir; // higher level first when desc
+        }
+        if (sortBy === "lastLogin") {
+          const dateA = a.loginHistories[0]?.createdAt?.getTime() ?? 0;
+          const dateB = b.loginHistories[0]?.createdAt?.getTime() ?? 0;
+          return (dateA - dateB) * dir;
+        }
+        return 0;
+      });
+      // Paginate after sort
+      sortedData = sortedData.slice(skip, skip + limit);
+    }
+
+    return apiSuccess(sortedData, { total, page, limit });
   } catch (e) {
     console.error("[GET /api/users]", e);
     return apiError("DB_ERROR", "ไม่สามารถดึงข้อมูลผู้ใช้ได้");
@@ -101,12 +141,27 @@ export async function DELETE(req: NextRequest) {
     const guardError = await guardSystemAdminDeleteUser(userId);
     if (guardError) return apiError("FORBIDDEN", guardError, 403);
 
+    const oldUser = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { department: true },
+    });
+
     await prisma.user.update({
       where: { id: userId },
       data: { deletedAt: new Date(), deletedBy: session.user.id, status: "INACTIVE" },
     });
 
-    await logAction(session.user.id, "users", "USER_DELETE", { entityType: "User", entityId: userId });
+    await logAction(session.user.id, "users", "USER_DELETE", {
+      entityType: "User",
+      entityId: userId,
+      oldValue: oldUser ? JSON.stringify({
+        name: `${oldUser.firstNameTh} ${oldUser.lastNameTh}`,
+        email: oldUser.email,
+        department: oldUser.department?.name,
+        status: oldUser.status,
+      }) : null,
+      newValue: null,
+    });
     return apiSuccess({ deleted: true });
   } catch {
     return apiError("DB_ERROR", "ไม่สามารถลบผู้ใช้ได้");
@@ -138,13 +193,36 @@ export async function PUT(req: NextRequest) {
     if (body.departmentId) updateData.departmentId = body.departmentId;
     if (body.status) updateData.status = body.status;
 
+    // Read old values before update for audit log
+    const oldUser = await prisma.user.findUnique({
+      where: { id },
+      include: { department: true, userRoles: { include: { role: true } } },
+    });
+
     const user = await prisma.user.update({
       where: { id },
       data: updateData,
       include: { department: true, userRoles: { include: { role: true } } },
     });
 
-    await logAction(session.user.id, "users", "USER_UPDATE", { entityType: "User", entityId: id });
+    const oldSnapshot = oldUser ? {
+      name: `${oldUser.firstNameTh} ${oldUser.lastNameTh}`,
+      department: oldUser.department?.name,
+      status: oldUser.status,
+    } : null;
+
+    const newSnapshot = {
+      name: `${user.firstNameTh} ${user.lastNameTh}`,
+      department: user.department?.name,
+      status: user.status,
+    };
+
+    await logAction(session.user.id, "users", "USER_UPDATE", {
+      entityType: "User",
+      entityId: id,
+      oldValue: oldSnapshot ? JSON.stringify(oldSnapshot) : null,
+      newValue: JSON.stringify(newSnapshot),
+    });
     return apiSuccess(user);
   } catch {
     return apiError("DB_ERROR", "ไม่สามารถแก้ไขผู้ใช้ได้");
@@ -194,6 +272,13 @@ export async function PATCH(req: NextRequest) {
     }
 
     let result: Record<string, unknown>;
+
+    // Read old statuses for audit trail before any changes
+    const oldUsers = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, status: true, isLocked: true },
+    });
+    const oldMap = new Map(oldUsers.map(u => [u.id, { status: u.status, isLocked: u.isLocked }]));
 
     switch (action) {
       case "assign-role": {
@@ -246,7 +331,13 @@ export async function PATCH(req: NextRequest) {
         return apiError("VALIDATION", `ไม่รู้จัก action: ${action}`);
     }
 
-    await logAction(session.user.id, "users", `BULK_${action.toUpperCase()}`, { entityType: "User", newValue: `${userIds.length} users` });
+    const newSnapshot: Record<string, unknown> = { action, count: userIds.length };
+
+    await logAction(session.user.id, "users", `BULK_${action.toUpperCase()}`, {
+      entityType: "User",
+      oldValue: JSON.stringify(Object.fromEntries(oldMap)),
+      newValue: JSON.stringify(newSnapshot),
+    });
     return apiSuccess(result);
   } catch (e) {
     console.error("[PATCH /api/users]", e);

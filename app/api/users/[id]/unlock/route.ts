@@ -18,12 +18,22 @@ export async function POST(
 
   try {
     const { id } = await params;
+    const oldUser = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, status: true, isLocked: true },
+    });
+
     await prisma.user.update({
       where: { id },
       data: { isLocked: false, updatedBy: session.user.id },
     });
 
-    await logAction(session.user.id, "users", "ACCOUNT_UNLOCK", { entityType: "User", entityId: id });
+    await logAction(session.user.id, "users", "ACCOUNT_UNLOCK", {
+      entityType: "User",
+      entityId: id,
+      oldValue: JSON.stringify({ isLocked: oldUser?.isLocked ?? true }),
+      newValue: JSON.stringify({ isLocked: false }),
+    });
     return apiSuccess({ message: "ปลดล็อกบัญชีสำเร็จ" });
   } catch {
     return apiError("DB_ERROR", "ไม่สามารถปลดล็อกบัญชีได้");

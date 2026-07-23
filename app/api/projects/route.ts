@@ -133,7 +133,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await logAction(session.user.id, "projects", "PROJECT_CREATE", { entityType: "Project", entityId: project.id as string });
+    await logAction(session.user.id, "projects", "PROJECT_CREATE", {
+      entityType: "Project",
+      entityId: project.id as string,
+      oldValue: null,
+      newValue: JSON.stringify({ title: body.title, status: body.status || "planning", description: body.description }),
+    });
     return apiSuccess(project);
   } catch (e: unknown) {
     console.error("[POST /api/projects]", e);
@@ -173,6 +178,12 @@ export async function PUT(req: NextRequest) {
     if (startDate) data.startDate = parseDate(startDate);
     if (deadline) data.endDate = parseDate(deadline);
 
+    // Read old values before update for audit log
+    const oldProject = await prisma.project.findUnique({
+      where: { id },
+      include: { projectType: true },
+    });
+
     // Resolve project type name → id
     if (type) {
       let pt = await prisma.projectType.findFirst({ where: { name: type } });
@@ -210,7 +221,15 @@ export async function PUT(req: NextRequest) {
       // Reject: moved from pending_approval to planning with a reason
       auditAction = "PROJECT_REJECT";
     }
-    await logAction(session.user.id, "projects", auditAction, { entityType: "Project", entityId: id });
+    await logAction(session.user.id, "projects", auditAction, {
+      entityType: "Project",
+      entityId: id,
+      oldValue: oldProject ? JSON.stringify({
+        name: oldProject.name, status: oldProject.status,
+        description: oldProject.description, type: oldProject.projectType?.name,
+      }) : null,
+      newValue: JSON.stringify({ name: name || oldProject?.name, status: status || oldProject?.status, description, type }),
+    });
     return apiSuccess({ updated: true });
   } catch (e: unknown) {
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
@@ -249,17 +268,29 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return apiError("VALIDATION", "กรุณาระบุ ID");
 
+    // Read project for guard + audit log
+    const oldProject = await prisma.project.findUnique({
+      where: { id },
+      include: { projectType: true },
+    });
+    if (!oldProject) return apiError("NOT_FOUND", "ไม่พบโครงการ");
+
     // User-level can only delete own projects
-    if (maxLevel < 50) {
-      const project = await prisma.project.findUnique({ where: { id } });
-      if (!project) return apiError("NOT_FOUND", "ไม่พบโครงการ");
-      if (project.ownerUserId !== session.user.id) {
-        return apiError("FORBIDDEN", "คุณสามารถลบได้เฉพาะโครงการของตนเอง", 403);
-      }
+    if (maxLevel < 50 && oldProject.ownerUserId !== session.user.id) {
+      return apiError("FORBIDDEN", "คุณสามารถลบได้เฉพาะโครงการของตนเอง", 403);
     }
 
     await prisma.project.update({ where: { id }, data: { deletedAt: new Date(), deletedBy: session.user.id } });
-    await logAction(session.user.id, "projects", "PROJECT_DELETE", { entityType: "Project", entityId: id });
+
+    await logAction(session.user.id, "projects", "PROJECT_DELETE", {
+      entityType: "Project",
+      entityId: id,
+      oldValue: JSON.stringify({
+        name: oldProject.name, status: oldProject.status,
+        description: oldProject.description, type: oldProject.projectType?.name,
+      }),
+      newValue: null,
+    });
     return apiSuccess({ deleted: true });
   } catch (e: unknown) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {

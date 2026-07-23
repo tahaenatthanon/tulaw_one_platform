@@ -151,7 +151,10 @@ export async function DELETE(req: NextRequest) {
   });
 
   // Audit log (non-fatal)
-  createAuditLog({ userId: session.user.id, module: "DOCUMENTS", action: "DOC_DELETE", entityType: "Document", entityId: id });
+  createAuditLog({
+    userId: session.user.id, module: "DOCUMENTS", action: "DOC_DELETE", entityType: "Document", entityId: id,
+    oldValue: JSON.stringify({ title: doc.title, fileType: doc.fileType }), newValue: null,
+  });
 
   return apiSuccess({ id, deleted: true });
 }

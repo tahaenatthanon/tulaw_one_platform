@@ -17,10 +17,10 @@ const severityColor: Record<string, string> = {
 
 export default function SecurityEventsPage() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-tu-text-primary">เหตุการณ์ความปลอดภัย</h1>
-        <p className="text-tu-text-muted text-sm mt-1">เหตุการณ์ที่น่าสงสัยหรือมีความเสี่ยงด้านความปลอดภัย</p>
+        <h2 className="text-sm font-semibold text-[var(--tu-text-primary)]">เหตุการณ์ความปลอดภัย</h2>
+        <p className="text-[var(--tu-text-muted)] text-sm mt-1">เหตุการณ์ที่น่าสงสัยหรือมีความเสี่ยงด้านความปลอดภัย</p>
       </div>
 
       <div className="space-y-3">

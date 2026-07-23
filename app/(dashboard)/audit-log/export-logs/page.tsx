@@ -8,10 +8,10 @@ export default function ExportLogsPage() {
   const [filters, setFilters] = useState({ dateFrom: "", dateTo: "", eventType: "", user: "", ip: "" });
 
   return (
-    <div className="p-6 space-y-6">
-      <div><h1 className="text-xl font-semibold text-tu-text-primary">ส่งออกบันทึก</h1><p className="text-tu-text-muted text-sm mt-1">ส่งออกข้อมูลในรูปแบบ CSV พร้อมตัวกรอง</p></div>
+    <div className="space-y-6">
+      <div><h2 className="text-sm font-semibold text-[var(--tu-text-primary)]">ส่งออกบันทึก</h2><p className="text-[var(--tu-text-muted)] text-sm mt-1">ส่งออกข้อมูลในรูปแบบ CSV พร้อมตัวกรอง</p></div>
 
-      <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border p-6 space-y-4">
+      <div className="rounded-2xl border border-[var(--tu-border)] bg-[var(--tu-surface)] p-6 space-y-4 shadow-sm">
         <h3 className="text-sm font-semibold text-tu-text-primary flex items-center gap-2"><Filter size={16} className="text-tu-primary" />ตัวกรอง</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[

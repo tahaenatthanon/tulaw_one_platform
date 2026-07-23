@@ -27,7 +27,11 @@ export async function POST(
       data: { status: "MFA_PENDING", updatedBy: session.user.id },
     });
 
-    await logAction(session.user.id, "auth", "MFA_RESET", { entityType: "User", entityId: id });
+    await logAction(session.user.id, "auth", "MFA_RESET", {
+      entityType: "User",
+      entityId: id,
+      newValue: JSON.stringify({ status: "MFA_PENDING", mfaEnabled: false }),
+    });
     return apiSuccess({ message: "รีเซ็ต MFA สำเร็จ" });
   } catch {
     return apiError("DB_ERROR", "ไม่สามารถรีเซ็ต MFA ได้");

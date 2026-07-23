@@ -67,7 +67,10 @@ export async function POST(req: NextRequest) {
     });
 
     // Audit log (non-fatal)
-    createAuditLog({ userId: session.user.id, module: "BOOK_MEETING", action: "CREATE", entityType: "RoomBooking", entityId: booking.id });
+    createAuditLog({
+      userId: session.user.id, module: "BOOK_MEETING", action: "CREATE", entityType: "RoomBooking", entityId: booking.id,
+      oldValue: null, newValue: JSON.stringify({ title, roomId, startTime, endTime, status }),
+    });
 
     return apiSuccess(booking);
   } catch (e: unknown) {
@@ -98,8 +101,12 @@ export async function PUT(req: NextRequest) {
         if (!ownBooking || ownBooking.userId !== (editSession.user as { id: string }).id) {
           return apiError("FORBIDDEN", "คุณสามารถยกเลิกได้เฉพาะการจองของตนเอง", 403);
         }
+        const oldTitle = ownBooking.title;
         const booking = await prisma.roomBooking.update({ where: { id }, data: { status: "cancelled", updatedBy: (editSession.user as { id: string }).id } });
-        createAuditLog({ userId: (editSession.user as { id: string }).id, module: "BOOK_MEETING", action: "CANCEL", entityType: "RoomBooking", entityId: id });
+        createAuditLog({
+          userId: (editSession.user as { id: string }).id, module: "BOOK_MEETING", action: "CANCEL", entityType: "RoomBooking", entityId: id,
+          oldValue: JSON.stringify({ title: oldTitle, status: ownBooking.status }), newValue: JSON.stringify({ status: "cancelled" }),
+        });
         return apiSuccess(booking);
       }
 
@@ -129,9 +136,11 @@ export async function PUT(req: NextRequest) {
         },
       });
 
-      // Audit log
       const auditAction = status === "confirmed" ? "APPROVE" : "REJECT";
-      createAuditLog({ userId: approveSession.user.id, module: "BOOK_MEETING", action: auditAction, entityType: "RoomBooking", entityId: id });
+      createAuditLog({
+        userId: approveSession.user.id, module: "BOOK_MEETING", action: auditAction, entityType: "RoomBooking", entityId: id,
+        oldValue: JSON.stringify({ title, status: prevStatus }), newValue: JSON.stringify({ title, status }),
+      });
 
       // Send notification for approve or reject (non-fatal)
       const targetBooking = prevBooking;

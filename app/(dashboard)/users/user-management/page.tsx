@@ -12,6 +12,8 @@ import { UserDetailDrawer } from "../_components/user-detail-drawer";
 import { UserImportDialog } from "../_components/user-import-dialog";
 import { UserExportDialog } from "../_components/user-export-dialog";
 import { UserPagination } from "../_components/user-pagination";
+import { RoleSummary } from "../_components/role-summary";
+import { UserFormModal } from "../_components/user-form-modal";
 
 /* ==============================================================================
    Types
@@ -70,8 +72,10 @@ function UserManagementContent() {
   const departmentFilter = searchParams.get("department") ?? "";
   const authSourceFilter = searchParams.get("authSource") ?? "all";
   const mfaFilter = searchParams.get("mfa") ?? "all";
+  const sortBy = searchParams.get("sortBy") ?? "";
+  const sortDir = searchParams.get("sortDir") ?? "";
 
-  // Batch URL update — push all params at once to avoid race conditions
+  // Batch URL update — replace current query params at current path
   function updateUrl(overrides: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
     for (const [key, val] of Object.entries(overrides)) {
@@ -86,7 +90,7 @@ function UserManagementContent() {
       params.set("page", "1");
     }
     const qs = params.toString();
-    router.push(`/users/user-management${qs ? "?" + qs : ""}`, { scroll: false });
+    router.replace(`?${qs}`, { scroll: false });
   }
 
   // Local state
@@ -103,6 +107,10 @@ function UserManagementContent() {
   const [actionMenu, setActionMenu] = useState<{
     user: TableUser;
     position: { top: number; left: number };
+  } | null>(null);
+  const [userModal, setUserModal] = useState<{
+    mode: "create" | "edit";
+    user?: TableUser;
   } | null>(null);
 
   // Reference data
@@ -150,6 +158,8 @@ function UserManagementContent() {
       if (departmentFilter) params.set("department", departmentFilter);
       if (authSourceFilter !== "all") params.set("authSource", authSourceFilter);
       if (mfaFilter !== "all") params.set("mfa", mfaFilter);
+      if (sortBy) params.set("sortBy", sortBy);
+      if (sortDir) params.set("sortDir", sortDir);
 
       const res = await fetch(`/api/users?${params.toString()}`);
       const json = await res.json();
@@ -162,7 +172,7 @@ function UserManagementContent() {
     } finally {
       setLoading(false);
     }
-  }, [canView, page, limit, search, roleFilter, statusFilter, departmentFilter, authSourceFilter, mfaFilter]);
+  }, [canView, page, limit, search, roleFilter, statusFilter, departmentFilter, authSourceFilter, mfaFilter, sortBy, sortDir]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -214,6 +224,11 @@ function UserManagementContent() {
     });
   }
 
+  function handleSort(column: string) {
+    const newDir = sortBy === column && sortDir === "asc" ? "desc" : "asc";
+    updateUrl({ sortBy: column, sortDir: newDir });
+  }
+
   function handleFilterChange(partial: Partial<FilterValues>) {
     const overrides: Record<string, string> = {};
     if ("search" in partial) overrides.search = partial.search ?? "";
@@ -238,19 +253,18 @@ function UserManagementContent() {
   if (!canView) {
     return (
       <div className="flex items-center justify-center py-20">
-        <p className="text-sm text-tu-text-muted">????????????????????????????????????????????????????</p>
+        <p className="text-sm text-[var(--tu-text-muted)]">คุณไม่มีสิทธิ์เข้าถึงหน้านี้</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Action Bar */}
       <UserActionBar
         onImportClick={() => setImportOpen(true)}
         onExportClick={() => setExportOpen(true)}
-        hasSelection={selectedIds.length > 0}
-        onBulkActionClick={() => {}}
+        onAddUserClick={() => setUserModal({ mode: "create" })}
       />
 
       {/* Bulk Action Bar */}
@@ -273,10 +287,10 @@ function UserManagementContent() {
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg border border-tu-error/20 bg-tu-error/5 px-4 py-3 text-sm text-tu-error">
+        <div className="rounded-xl border border-[var(--tu-error)]/20 bg-[var(--tu-error)]/5 px-4 py-3 text-sm text-[var(--tu-error)]">
           {error}
           <button type="button" onClick={fetchUsers} className="ml-3 underline text-xs">
-            ????????????
+            ลองใหม่
           </button>
         </div>
       )}
@@ -291,6 +305,9 @@ function UserManagementContent() {
         onUserClick={handleUserClick}
         onActionClick={handleActionClick}
         loading={loading}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSort={handleSort}
       />
 
       {/* Pagination */}
@@ -302,6 +319,18 @@ function UserManagementContent() {
         onLimitChange={(l) => updateUrl({ limit: String(l), page: String(1) })}
       />
 
+      {/* Role Summary + Permission Preview */}
+      <RoleSummary
+        roleCounts={(() => {
+          const map = new Map<string, number>();
+          for (const u of users) {
+            const code = u.userRoles?.find((r) => r.isActive)?.role.roleCode ?? "viewer";
+            map.set(code, (map.get(code) ?? 0) + 1);
+          }
+          return map;
+        })()}
+      />
+
       {/* Action Menu (context) */}
       <UserActionMenu
         user={actionMenu?.user!}
@@ -310,6 +339,14 @@ function UserManagementContent() {
         onActionComplete={fetchUsers}
         onViewClick={() => {
           if (actionMenu?.user) setDrawerUserId(actionMenu.user.id);
+          setActionMenu(null);
+        }}
+        onEditClick={() => {
+          if (actionMenu?.user) setUserModal({ mode: "edit", user: actionMenu.user });
+          setActionMenu(null);
+        }}
+        onAuditLogClick={() => {
+          if (actionMenu?.user) router.push(`/audit-log/activity-log?userId=${actionMenu.user.id}`);
           setActionMenu(null);
         }}
         position={actionMenu?.position ?? { top: 0, left: 0 }}
@@ -334,6 +371,28 @@ function UserManagementContent() {
         isOpen={exportOpen}
         onClose={() => setExportOpen(false)}
       />
+
+      {/* User Create/Edit Modal */}
+      <UserFormModal
+        isOpen={!!userModal}
+        mode={userModal?.mode ?? "create"}
+        user={userModal?.user ? {
+          id: userModal.user.id,
+          name: userModal.user.name,
+          email: userModal.user.email,
+          department: userModal.user.department,
+          role: getRoleCode(userModal.user),
+          status: userModal.user.status,
+        } : undefined}
+        departments={departments}
+        roles={roles.map(r => ({ roleCode: r.roleCode, nameTh: r.nameTh }))}
+        onClose={() => setUserModal(null)}
+        onComplete={fetchUsers}
+      />
     </div>
   );
+}
+
+function getRoleCode(user: TableUser): string {
+  return user.userRoles?.find((r) => r.isActive)?.role.roleCode ?? "viewer";
 }

@@ -54,26 +54,26 @@ export default function PermissionManagementPage() {
       permissions: g.permissions.filter(
         (p) =>
           p.code.toLowerCase().includes(search.toLowerCase()) ||
-          p.name.toLowerCase().includes(search.toLowerCase())
+          p.name.toLowerCase().includes(search.toLowerCase()),
       ),
     }))
     .filter((g) => g.permissions.length > 0);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-tu-text-primary">จัดการสิทธิ์</h1>
-        <p className="text-tu-text-muted text-sm mt-1">กำหนดสิทธิ์การเข้าถึงแต่ละโมดูล</p>
+        <h2 className="text-sm font-semibold text-[var(--tu-text-primary)]">จัดการสิทธิ์</h2>
+        <p className="text-[var(--tu-text-muted)] text-sm mt-1">กำหนดสิทธิ์การเข้าถึงแต่ละโมดูล</p>
       </div>
 
       <div className="relative max-w-md">
-        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tu-text-muted" />
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--tu-text-muted)]" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="ค้นหาสิทธิ์..."
-          className="w-full rounded-[--radius-input] border border-tu-border bg-tu-surface pl-9 pr-4 py-2.5 text-sm focus:border-tu-border-focus focus:ring-2 focus:ring-tu-border-focus/20 outline-none transition"
+          className="w-full h-11 rounded-xl border border-transparent bg-slate-50 pl-10 pr-4 text-sm text-[var(--tu-text-primary)] placeholder:text-[var(--tu-text-muted)] transition-all focus:border-[var(--tu-primary)] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[var(--tu-primary)]/10"
         />
       </div>
 
@@ -81,12 +81,12 @@ export default function PermissionManagementPage() {
         {filtered.map((group) => (
           <div
             key={group.name}
-            className="bg-tu-surface rounded-[--radius-card] border border-tu-border"
+            className="rounded-2xl border border-[var(--tu-border)] bg-[var(--tu-surface)] shadow-sm"
           >
-            <div className="px-5 py-3 border-b border-tu-border bg-tu-bg rounded-t-[--radius-card]">
+            <div className="px-5 py-3 border-b border-[var(--tu-border)] bg-slate-50/50 rounded-t-2xl">
               <div className="flex items-center gap-2">
-                <ShieldCheck size={18} className="text-tu-primary" />
-                <h3 className="text-sm font-semibold text-tu-text-primary">{group.name}</h3>
+                <ShieldCheck size={18} className="text-[var(--tu-primary)]" />
+                <h3 className="text-sm font-semibold text-[var(--tu-text-primary)]">{group.name}</h3>
               </div>
             </div>
             <div className="p-5">
@@ -94,12 +94,12 @@ export default function PermissionManagementPage() {
                 {group.permissions.map((perm) => (
                   <div
                     key={perm.code}
-                    className="flex items-center gap-2 px-3 py-2 rounded-md border border-tu-border text-sm"
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--tu-border)] text-sm"
                   >
-                    <code className="text-[11px] text-tu-primary font-mono bg-tu-primary-soft px-1.5 py-0.5 rounded">
+                    <code className="text-[11px] text-[var(--tu-primary)] font-mono bg-[var(--tu-primary-soft)] px-1.5 py-0.5 rounded">
                       {perm.code}
                     </code>
-                    <span className="text-tu-text-secondary">{perm.name}</span>
+                    <span className="text-[var(--tu-text-secondary)]">{perm.name}</span>
                   </div>
                 ))}
               </div>
@@ -108,8 +108,8 @@ export default function PermissionManagementPage() {
         ))}
       </div>
 
-      <div className="text-center text-sm text-tu-text-muted">
-        แสดง 4 จาก 17 กลุ่มสิทธิ์ (รวม {groups.reduce((s, g) => s + g.permissions.length, 0)} สิทธิ์)
+      <div className="text-center text-sm text-[var(--tu-text-muted)]">
+        แสดง {filtered.length} จาก {groups.length} กลุ่มสิทธิ์ (รวม {groups.reduce((s, g) => s + g.permissions.length, 0)} สิทธิ์)
       </div>
     </div>
   );

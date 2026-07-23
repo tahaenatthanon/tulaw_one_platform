@@ -172,7 +172,10 @@ export async function PUT(req: Request) {
     });
 
     // Audit log (non-fatal)
-    createAuditLog({ userId: session.user.id, module: "INTRANET", action: "Announcement_Update", entityType: "Announcement", entityId: id, newValue: title.trim() });
+    createAuditLog({
+      userId: session.user.id, module: "INTRANET", action: "Announcement_Update", entityType: "Announcement", entityId: id,
+      oldValue: JSON.stringify({ title: ann.title, category: ann.categoryId }), newValue: JSON.stringify({ title: title.trim(), category }),
+    });
 
     return apiSuccess(updated);
   } catch (e: unknown) {
@@ -208,7 +211,10 @@ export async function DELETE(req: Request) {
     });
 
     // Audit log (non-fatal)
-    createAuditLog({ userId: session.user.id, module: "INTRANET", action: "Announcement_Delete", entityType: "Announcement", entityId: id });
+    createAuditLog({
+      userId: session.user.id, module: "INTRANET", action: "Announcement_Delete", entityType: "Announcement", entityId: id,
+      oldValue: JSON.stringify({ title: ann.title, category: ann.categoryId }), newValue: null,
+    });
 
     return apiSuccess({ deleted: true });
   } catch (e: unknown) {

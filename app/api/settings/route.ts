@@ -79,14 +79,21 @@ export async function PATCH(req: NextRequest) {
     const configKey = `${section}.${key}`;
     const val = typeof value === "string" ? value : JSON.stringify(value);
 
+    // Read old value before upsert
+    const oldRow = await prisma.systemConfig.findUnique({ where: { configKey } });
+
     await prisma.systemConfig.upsert({
       where: { configKey },
       create: { configKey, configValue: val },
       update: { configValue: val },
     });
 
-    // Audit log (non-fatal)
-    logAction(session.user.id, "settings", "CONFIG_UPDATE", { entityType: "SystemConfig", entityId: configKey, newValue: key });
+    logAction(session.user.id, "settings", "CONFIG_UPDATE", {
+      entityType: "SystemConfig",
+      entityId: configKey,
+      oldValue: oldRow?.configValue ?? null,
+      newValue: val,
+    });
 
     return apiSuccess({ section, key, updated: true });
   } catch (e) {
@@ -119,6 +126,10 @@ export async function PUT(req: NextRequest) {
     }
 
     if (entries.length === 0) return apiSuccess({ message: "No changes to save" });
+
+    // Read old values before batch upsert
+    const oldRows = await prisma.systemConfig.findMany();
+    const oldMap = new Map(oldRows.map(r => [r.configKey, r.configValue]));
 
     // Upsert all entries
     for (const { key, value } of entries) {
@@ -163,7 +174,9 @@ export async function PUT(req: NextRequest) {
     }
 
     await logAction(session.user.id, "settings", "CONFIG_UPDATE", {
-      entityType: "SystemConfig", newValue: `${entries.length} settings updated`,
+      entityType: "SystemConfig",
+      oldValue: JSON.stringify(Object.fromEntries(oldMap)),
+      newValue: JSON.stringify(Object.fromEntries(entries.map(e => [e.key, e.value]))),
     });
 
     // Re-read and return

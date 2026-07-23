@@ -11,10 +11,10 @@ const mockLogins = [
 
 export default function LoginHistoryPage() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-tu-text-primary">ประวัติการเข้าสู่ระบบ</h1>
-        <p className="text-tu-text-muted text-sm mt-1">บันทึกการเข้าสู่ระบบทั้งหมด</p>
+        <h2 className="text-sm font-semibold text-[var(--tu-text-primary)]">ประวัติการเข้าสู่ระบบ</h2>
+        <p className="text-[var(--tu-text-muted)] text-sm mt-1">บันทึกการเข้าสู่ระบบทั้งหมด</p>
       </div>
 
       <div className="bg-tu-surface rounded-[--radius-card] border border-tu-border overflow-hidden">

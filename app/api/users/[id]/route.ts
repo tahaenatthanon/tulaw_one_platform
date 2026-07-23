@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-utils";
 import { authOptions } from "@/lib/auth";
 import { hasPermission } from "@/lib/permissions";
+import { logAction } from "@/lib/audit-log";
 import type { NextRequest } from "next/server";
 
 export async function GET(
@@ -79,6 +80,8 @@ export async function GET(
         lastLogin: user.loginHistories[0]?.createdAt ?? null,
         ipAddress: user.loginHistories[0]?.ipAddress ?? user.ipAddress,
         isLocked: user.isLocked,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       },
       roles: user.userRoles.map(ur => ({
         id: ur.roleId,
@@ -115,5 +118,48 @@ export async function GET(
   } catch (e) {
     console.error("[GET /api/users/:id]", e);
     return apiError("DB_ERROR", "ไม่สามารถดึงข้อมูลผู้ใช้ได้");
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  const roles = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];
+  if (!session?.user?.email || !hasPermission(roles, "USERS_DELETE")) {
+    return apiError("FORBIDDEN", "ไม่มีสิทธิ์ลบผู้ใช้", 403);
+  }
+
+  try {
+    const { id } = await params;
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: { department: true, userRoles: { include: { role: true } } },
+    });
+    if (!user) return apiError("NOT_FOUND", "ไม่พบผู้ใช้", 404);
+
+    const oldSnapshot = {
+      name: `${user.firstNameTh} ${user.lastNameTh}`,
+      email: user.email,
+      department: user.department?.name,
+      status: user.status,
+    };
+
+    await prisma.user.delete({
+      where: { id },
+    });
+
+    await logAction(session.user.id, "users", "USER_DELETE", {
+      entityType: "User",
+      entityId: id,
+      oldValue: JSON.stringify(oldSnapshot),
+      newValue: null,
+    });
+
+    return apiSuccess({ deleted: true });
+  } catch (e) {
+    console.error("[DELETE /api/users/:id]", e);
+    return apiError("DB_ERROR", "ไม่สามารถลบผู้ใช้ได้");
   }
 }

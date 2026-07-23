@@ -89,8 +89,8 @@ export async function GET(
         recordId: log.entityId || "N/A",
       },
       changeHistory: {
-        beforeValue: log.oldValue || null,
-        afterValue: log.newValue || null,
+        beforeValue: log.oldValue ?? null,
+        afterValue: log.newValue ?? null,
         hasChanges: !!(log.oldValue || log.newValue),
       },
       requestInfo: {

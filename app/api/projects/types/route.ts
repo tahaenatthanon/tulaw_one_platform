@@ -41,7 +41,10 @@ export async function PUT(req: NextRequest) {
     }
 
     const types = await prisma.projectType.findMany({ orderBy: { id: "asc" }, select: { id: true, name: true } });
-    createAuditLog({ userId: session.user.id, module: "PROJECTS", action: "TYPE_UPDATE", entityType: "ProjectType", newValue: JSON.stringify(names) });
+    createAuditLog({
+      userId: session.user.id, module: "PROJECTS", action: "TYPE_UPDATE", entityType: "ProjectType",
+      oldValue: JSON.stringify(existing.map(t => t.name)), newValue: JSON.stringify(names),
+    });
     return apiSuccess(types);
   } catch (e) {
     console.error("[PUT /api/projects/types]", e);
