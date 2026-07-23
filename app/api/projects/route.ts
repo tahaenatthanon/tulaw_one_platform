@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     await logAction(session.user.id, "projects", "PROJECT_CREATE", {
       entityType: "Project",
       entityId: project.id as string,
-      oldValue: null,
+      oldValue: undefined,
       newValue: JSON.stringify({ title: body.title, status: body.status || "planning", description: body.description }),
     });
     return apiSuccess(project);
