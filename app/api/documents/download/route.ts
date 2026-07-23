@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   // Audit log (non-fatal)
   createAuditLog({ userId: session.user.id, module: "DOCUMENTS", action: "DOC_DOWNLOAD", entityType: "Document", entityId: id });
 
-  return new Response(buffer, {
+  return new Response(new Uint8Array(buffer), {
     status: 200,
     headers: {
       "Content-Type": doc.storageFile.mimeType,
