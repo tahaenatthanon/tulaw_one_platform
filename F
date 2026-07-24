@@ -1,0 +1,58 @@
+## ADDED Requirements
+
+### Requirement: Section Layout with Card Container
+
+ระบบ SHALL แสดงการตั้งค่าในรูปแบบ Section Card พร้อม Title และ Description สำหรับแต่ละกลุ่มการตั้งค่า โดยใช้ Component ConfigSection
+
+#### Scenario: Authentication แสดง Section การตั้งค่า
+
+- **WHEN** ผู้ใช้เลือกหมวดหมู่ Authentication
+- **THEN** ระบบ SHALL แสดง Section Card สำหรับ Session, Login Policy, MFA และ Advanced
+- **AND** แต่ละ Section SHALL มี Title และ Description
+
+#### Scenario: Storage แสดง Section การตั้งค่า
+
+- **WHEN** ผู้ใช้เลือกหมวดหมู่ Storage
+- **THEN** ระบบ SHALL แสดง Section Card สำหรับ Quota และ File Types
+
+### Requirement: Consistent Spacing
+
+ระยะห่างระหว่าง Section Card SHALL เป็นไปตาม Design System (8px Spacing System) โดยใช้ `space-y-5` หรือเทียบเท่า
+
+#### Scenario: ระยะห่างระหว่าง Section Card สม่ำเสมอ
+
+- **WHEN** ผู้ใช้ดู Configuration Panel
+- **THEN** ระยะห่างระหว่าง Section Card ทุกอัน SHALL เท่ากันและเป็นไปตาม Design System
+
+### Requirement: Section Content Organization
+
+แต่ละ Section SHALL จัดกลุ่ม Setting ที่เกี่ยวข้องกันไว้ด้วยกัน ตามโครงสร้างที่กำหนด:
+- Authentication: Session, Login Policy, MFA, Advanced
+- SSO/LDAP: LDAP Configuration, Active Directory, Synchronization
+- Branding: Identity, Theme, Preview
+- Storage: Quota, File Types
+- Integration: API Keys, External Services
+
+#### Scenario: Authentication section organization
+
+- **WHEN** ผู้ใช้ดู Authentication settings
+- **THEN** ระบบ SHALL แสดง Session settings (timeout, JWT expiry), Login Policy (max attempts), MFA (enforcement toggle) และ Advanced ใน Section แยกกัน
+
+#### Scenario: Branding section organization
+
+- **WHEN** ผู้ใช้ดู Branding settings
+- **THEN** ระบบ SHALL แสดง Identity (logo, system name), Theme (color picker, presets) และ Preview ใน Section แยกกัน
+
+### Requirement: No Deprecated Settings
+
+Section ใด ๆ ภายใน System Configuration SHALL NOT แสดงการตั้งค่าที่เกี่ยวข้องกับ Meeting Rooms, Application Status, Categories, Security หรือ Audit
+
+#### Scenario: Authentication section ไม่มีการตั้งค่า Security/Audit
+
+- **WHEN** ผู้ใช้ดู Authentication settings
+- **THEN** ระบบ SHALL NOT แสดง Security หรือ Audit settings ภายใน Authentication section
+
+#### Scenario: Storage section ไม่มีการตั้งค่า Categories
+
+- **WHEN** ผู้ใช้ดู Storage settings
+- **THEN** ระบบ SHALL NOT แสดง Announcement Categories หรือ Project Categories ภายใน Storage section

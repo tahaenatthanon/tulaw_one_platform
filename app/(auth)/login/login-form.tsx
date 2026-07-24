@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import useSWR from "swr";
+import { swrFetcher } from "@/lib/fetcher";
 import {
   Eye,
   EyeOff,
@@ -39,6 +41,12 @@ export function LoginForm({ azureAdEnabled }: LoginFormProps) {
   const [backupCode, setBackupCode] = useState("");
   const [, setMfaRequired] = useState(false);
   const [, setMfaEnabled] = useState(false);
+
+  // Fetch system branding (logo, name) from settings API — Single Source of Truth
+  const { data: settingsData } = useSWR("/api/settings", swrFetcher);
+  const branding = (settingsData as Record<string, Record<string, unknown>> | undefined)?.branding as Record<string, string> | undefined;
+  const systemName = branding?.name || "TULAW";
+  const logoUrl = branding?.logoUrl || null;
 
   // Show OAuth errors from URL query param
   useEffect(() => {
@@ -231,13 +239,17 @@ export function LoginForm({ azureAdEnabled }: LoginFormProps) {
           {/* Logo + Hero */}
           <div>
             <div className="mb-10 flex items-center gap-4 sm:mb-12">
-              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/15 backdrop-blur">
-                <span className="text-xl font-bold text-white">มธ</span>
+              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/15 backdrop-blur overflow-hidden">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={systemName} className="h-full w-full object-contain p-1" />
+                ) : (
+                  <span className="text-xl font-bold text-white">มธ</span>
+                )}
               </div>
 
               <div>
                 <h1 className="text-lg font-semibold text-white">
-                  TULAW
+                  {systemName}
                 </h1>
                 <p className="text-xs uppercase tracking-[0.2em] text-white/60">
                   Faculty of Law
@@ -250,7 +262,7 @@ export function LoginForm({ azureAdEnabled }: LoginFormProps) {
             </div>
 
             <h1 className="text-5xl font-semibold leading-[1.0] tracking-tight text-white sm:text-6xl xl:text-7xl">
-              TULAW
+              {systemName}
             </h1>
             <h2 className="mt-3 text-5xl font-semibold leading-[1.0] tracking-tight text-[#FDB813] sm:text-6xl xl:text-7xl">
               ONE Platform

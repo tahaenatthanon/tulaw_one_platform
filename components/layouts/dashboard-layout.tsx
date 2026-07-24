@@ -97,10 +97,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
-  // Fetch system branding (name) from settings API
+  // Fetch system branding (name, logo) from settings API — Single Source of Truth
   const { data: settingsData } = useSWR("/api/settings", swrFetcher);
   const branding = (settingsData as Record<string, Record<string, unknown>> | undefined)?.branding as Record<string, string> | undefined;
   const systemName = branding?.name || "TULAW ONE";
+  const logoUrl = branding?.logoUrl || null;
 
   // Update document title to reflect branding
   useEffect(() => {
@@ -120,11 +121,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        {/* Logo */}
+        {/* Logo — displays uploaded logo image or default text fallback */}
         <div className={cn("flex h-16 items-center border-b border-white/10", sidebarCollapsed ? "justify-center px-3" : "gap-3 px-5")}>
           <TooltipWrapper show={sidebarCollapsed} label={systemName}>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-tu-secondary">
-              <span className="text-tu-text-primary font-bold text-sm">มธ</span>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-tu-secondary overflow-hidden">
+              {logoUrl ? (
+                <img src={logoUrl} alt={systemName} className="h-full w-full object-contain p-0.5" />
+              ) : (
+                <span className="text-tu-text-primary font-bold text-sm">มธ</span>
+              )}
             </div>
           </TooltipWrapper>
           {!sidebarCollapsed && (
